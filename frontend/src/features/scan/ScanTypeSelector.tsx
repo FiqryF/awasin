@@ -4,7 +4,7 @@ import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion'
 import { scanTypes } from './scanConfig'
 import type { ScanType } from './scanConfig'
 
-type Props = { selected: ScanType; onSelect: (type: ScanType) => void }
+type Props = Readonly<{ selected: ScanType; onSelect: (type: ScanType) => void }>
 
 export function ScanTypeSelector({ selected, onSelect }: Props) {
   const tabs = useRef<(HTMLButtonElement | null)[]>([])

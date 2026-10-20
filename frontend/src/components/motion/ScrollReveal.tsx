@@ -2,7 +2,7 @@ import { motion } from 'motion/react'
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion'
 import type { ReactNode } from 'react'
 
-type ScrollRevealProps = { children: ReactNode; className?: string; delay?: number }
+type ScrollRevealProps = Readonly<{ children: ReactNode; className?: string; delay?: number }>
 
 export function ScrollReveal({ children, className, delay = 0 }: ScrollRevealProps) {
   const reducedMotion = usePrefersReducedMotion()

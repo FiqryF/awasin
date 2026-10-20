@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { SubmitEvent } from 'react'
 import { ArrowUpRight, Info, LockKeyhole } from 'lucide-react'
 import { motion } from 'motion/react'
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion'
@@ -7,7 +7,7 @@ import { FileUpload } from './FileUpload'
 import { validateFile, validateScanInput } from './scanConfig'
 import type { ScanConfig } from './scanConfig'
 
-export function ScanForm({ config }: { config: ScanConfig }) {
+export function ScanForm({ config }: Readonly<{ config: ScanConfig }>) {
   const [text, setText] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -16,7 +16,7 @@ export function ScanForm({ config }: { config: ScanConfig }) {
   const reducedMotion = usePrefersReducedMotion()
   const isUrl = config.id === 'link' || config.id === 'website'
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     const validationError = validateScanInput(config.id, text, file)
     setError(validationError); setSubmitted(!validationError)
@@ -41,7 +41,7 @@ export function ScanForm({ config }: { config: ScanConfig }) {
         }} />}
         {error && <p id="scan-error" role="alert" className="form-error">{error}</p>}
         <div className="form-bottom"><p className="privacy-note"><LockKeyhole size={15} aria-hidden="true" />Input tidak dikirim atau disimpan.</p><button type="submit" className="button button-red">Periksa Sekarang <ArrowUpRight size={19} aria-hidden="true" /></button></div>
-        {submitted && <div className="scan-notice" role="status"><Info size={20} aria-hidden="true" /><p><strong>Fitur pemeriksaan sedang dalam pengembangan.</strong> Analisis keamanan belum tersedia. Inputmu belum dianalisis dan tidak dikirim ke layanan mana pun.</p></div>}
+        {submitted && <output className="scan-notice"><Info size={20} aria-hidden="true" /><span><strong>Fitur pemeriksaan sedang dalam pengembangan.</strong> Analisis keamanan belum tersedia. Inputmu belum dianalisis dan tidak dikirim ke layanan mana pun.</span></output>}
       </form>
     </motion.div>
   )

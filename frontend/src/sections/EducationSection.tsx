@@ -11,7 +11,7 @@ const articles = [
   { category: 'Keaslian media', title: 'Gambar dan video perlu diverifikasi.', description: 'Konten sintetis bisa terlihat meyakinkan. Periksa konteks, sumber asli, dan bukti lain sebelum mempercayainya.', action: 'Kenali manipulasi media', image: '/assets/education/media.jpg' },
 ]
 
-function EducationArticle({ article }: { article: typeof articles[number] }) {
+function EducationArticle({ article }: Readonly<{ article: typeof articles[number] }>) {
   return (
     <article className="article-card">
       <div className="article-image"><img src={article.image} alt="" loading="lazy" decoding="async" width={640} height={480} /></div>
@@ -26,7 +26,7 @@ function EducationArticle({ article }: { article: typeof articles[number] }) {
 }
 
 export function EducationSection() {
-  const track = useRef<HTMLDivElement>(null)
+  const track = useRef<HTMLElement>(null)
   const reducedMotion = usePrefersReducedMotion()
   const [controls, setControls] = useState({ previous: false, next: true })
   const updateControls = useCallback(() => {
@@ -67,9 +67,9 @@ export function EducationSection() {
           <button type="button" className="icon-button" aria-label="Artikel sebelumnya" aria-controls="education-carousel" disabled={!controls.previous} onClick={() => moveArticles(-1)}><ArrowLeft size={19} aria-hidden="true" /></button>
           <button type="button" className="icon-button" aria-label="Artikel berikutnya" aria-controls="education-carousel" disabled={!controls.next} onClick={() => moveArticles(1)}><ArrowRight size={19} aria-hidden="true" /></button>
         </div></div>
-        <div ref={track} id="education-carousel" className="education-carousel" role="region" aria-label="Topik edukasi, geser untuk melihat artikel lainnya" tabIndex={0} onScroll={updateControls}>{articles.map((article, index) => (
+        <section ref={track} id="education-carousel" className="education-carousel" aria-label="Topik edukasi, geser untuk melihat artikel lainnya" onScroll={updateControls}>{articles.map((article, index) => (
           <ScrollReveal key={article.title} className="article-reveal" delay={(index + 1) * 0.08}><EducationArticle article={article} /></ScrollReveal>
-        ))}</div>
+        ))}</section>
         <p className="education-note">Pratinjau topik edukasi. Artikel lengkap sedang disiapkan.</p>
       </div>
     </section>

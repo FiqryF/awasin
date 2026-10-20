@@ -23,16 +23,27 @@ export function validateFile(file: Pick<File, 'size' | 'type'>, mode: ScanType):
   return null
 }
 
+function validateUrl(text: string): string | null {
+  try {
+    const url = new URL(text.trim())
+    if (!['http:', 'https:'].includes(url.protocol) || !url.hostname) throw new Error('Invalid URL')
+    return null
+  } catch { return 'Masukkan alamat lengkap dengan https:// atau http://, misalnya https://contoh.com.' }
+}
+
+function validateMessage(text: string, hasFile: boolean): string | null {
+  if (!hasFile && text.trim().length < 10) return 'Masukkan sedikitnya 10 karakter pesan, atau pilih screenshot.'
+  if (text.length > 10000) return 'Pesan terlalu panjang. Batasi hingga 10.000 karakter.'
+  return null
+}
+
 export function validateScanInput(mode: ScanType, text: string, file: Pick<File, 'size' | 'type'> | null): string | null {
-  if (file) { const error = validateFile(file, mode); if (error) return error }
-  if (mode === 'link' || mode === 'website') {
-    try {
-      const url = new URL(text.trim())
-      if (!['http:', 'https:'].includes(url.protocol) || !url.hostname) throw new Error('Invalid URL')
-    } catch { return 'Masukkan alamat lengkap dengan https:// atau http://, misalnya https://contoh.com.' }
-  } else if (mode === 'message') {
-    if (!file && text.trim().length < 10) return 'Masukkan sedikitnya 10 karakter pesan, atau pilih screenshot.'
-    if (text.length > 10000) return 'Pesan terlalu panjang. Batasi hingga 10.000 karakter.'
-  } else if (!file) return mode === 'video' ? 'Pilih video yang ingin diperiksa terlebih dahulu.' : 'Pilih gambar yang ingin diperiksa terlebih dahulu.'
+  if (file) {
+    const error = validateFile(file, mode)
+    if (error) return error
+  }
+  if (mode === 'link' || mode === 'website') return validateUrl(text)
+  if (mode === 'message') return validateMessage(text, Boolean(file))
+  if (!file) return mode === 'video' ? 'Pilih video yang ingin diperiksa terlebih dahulu.' : 'Pilih gambar yang ingin diperiksa terlebih dahulu.'
   return null
 }

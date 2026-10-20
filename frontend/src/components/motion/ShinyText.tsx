@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { motion } from 'motion/react'
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion'
 
-type ShinyTextProps = { children: ReactNode; className?: string; duration?: number }
+type ShinyTextProps = Readonly<{ children: ReactNode; className?: string; duration?: number }>
 
 export function ShinyText({ children, className = '', duration = 3 }: ShinyTextProps) {
   const reducedMotion = usePrefersReducedMotion()

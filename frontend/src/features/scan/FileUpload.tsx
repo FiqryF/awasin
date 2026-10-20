@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { FileVideo, Upload, X } from 'lucide-react'
 import { imageTypes, videoTypes } from './scanConfig'
 
-type Props = { label: string; video: boolean; file: File | null; error: string | null; onChange: (file: File | null) => void }
+type Props = Readonly<{ label: string; video: boolean; file: File | null; error: string | null; onChange: (file: File | null) => void }>
 
-function ImagePreview({ file }: { file: File }) {
+function ImagePreview({ file }: Readonly<{ file: File }>) {
   const image = useRef<HTMLImageElement>(null)
   const [failed, setFailed] = useState(false)
   useEffect(() => {
