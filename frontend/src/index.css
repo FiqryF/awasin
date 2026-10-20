@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #145c45;
+  --color-ink: #192c26;
+  --color-muted: #52645c;
+  --color-line: #d4dfd8;
+  --color-canvas: #f8faf7;
+  --font-sans: "Segoe UI", system-ui, sans-serif;
+}
+
+@layer base {
+  body { margin: 0; min-width: 0; background: var(--color-canvas); color: var(--color-ink); }
+  h1, h2, h3, p, a { overflow-wrap: anywhere; }
+  ::selection { background: #c6e8d8; color: var(--color-ink); }
+  :focus-visible { outline: 3px solid var(--color-brand); outline-offset: 5px; }
+  nav a[aria-current="page"] { color: var(--color-brand); text-decoration: underline; text-underline-offset: 6px; }
+}
+
+@layer components {
+  .page-width { width: min(100% - 2.5rem, 64rem); margin-inline: auto; }
+  .action-link { border-radius: 6px; padding: 0.75rem 1rem; background: var(--color-brand); color: white; font-weight: 600; }
+  .action-link:hover { background: #104b38; }
+  .skip-link { position: absolute; top: -6rem; left: 1rem; z-index: 10; background: white; padding: 0.75rem 1rem; color: var(--color-brand); }
+  .skip-link:focus { top: 1rem; }
+}
