@@ -118,7 +118,7 @@ Folder cadangan sengaja belum berisi implementasi atau file kosong. Git tidak me
 | Admin (nanti) | `/admin/feedback` | Moderasi feedback |
 | Semua | `*` | Halaman tidak ditemukan |
 
-Semua route selain Home dan 404 memakai placeholder bersama. Label akses hanya mendokumentasikan rencana: **belum ada autentikasi atau proteksi route**, termasuk admin. Tidak ada status login buatan. Hosting produksi perlu mengarahkan URL SPA yang tidak cocok dengan file statis ke `index.html` agar refresh pada nested route bekerja.
+Home, Feedback, dan 404 memakai halaman tersendiri; route lainnya memakai placeholder bersama. Label akses hanya mendokumentasikan rencana: **belum ada autentikasi atau proteksi route**, termasuk admin. Tidak ada status login buatan. Hosting produksi perlu mengarahkan URL SPA yang tidak cocok dengan file statis ke `index.html` agar refresh pada nested route bekerja.
 
 ## Fondasi tampilan dan aksesibilitas
 
@@ -126,7 +126,7 @@ Implementasi mengikuti blueprint `AWASIN_UI_Reference_Adapted.html`: hero video 
 
 Navbar memakai simbol lingkaran dengan pusat merah, glass pill, blur, border, dan inset highlight. Subscription scroll Motion yang sama membaca batas section gelap terhadap titik tengah navbar: hero/scan/footer/placeholder memakai glass hitam dengan teks Honeydew; edukasi memakai Honeydew dengan teks hitam/merah. Target dicache dan dihitung ulang saat route atau viewport berubah. Saat scroll, skala sedikit mengecil dan glass lebih terdefinisi. Di bawah 1024 px, navbar menggunakan disclosure nonmodal dengan panel glass terpisah: tombol menu, navigasi Tab, Escape mengembalikan fokus ke tombol, klik luar dan navigasi menutup panel. Karena bukan modal, fokus tidak dikunci. Container desktop dibatasi 1280 px.
 
-Anchor `/#beranda`, `/#periksa`, `/#edukasi` bekerja dari Home maupun route lain. Scroll margin menghindari header; skip link, label input, pesan error, live status, dan fokus judul disediakan. Selector mendukung Left/Right, Home/End, dan roving tab index. Di bawah 640 px selector memiliki dua kolom; mulai 640 px tiga kolom. Scan/sidebar bertumpuk di bawah 1024 px. Edukasi menampilkan banner bergambar dengan overlay Honeydew dan teks di kiri, lalu carousel empat artikel di bawahnya. Desktop menampilkan tiga kartu sekaligus, tablet dua, dan mobile satu dengan petunjuk kartu berikutnya. Carousel memakai scroll snap, tombol sebelumnya/berikutnya dengan state disabled, fokus keyboard, serta swipe native; reduced motion menonaktifkan smooth scroll. Foto ilustrasi disimpan lokal di public/assets/education/ dengan sumber tercatat dalam SOURCES.md. Footer multikolom pada desktop, satu kolom pada mobile. Link feedback mengarah ke placeholder yang ada; kebijakan privasi belum aktif dan ditandai dalam pengembangan.
+Anchor `/#beranda`, `/#periksa`, `/#edukasi` bekerja dari Home maupun route lain. Scroll margin menghindari header; skip link, label input, pesan error, live status, dan fokus judul disediakan. Selector mendukung Left/Right, Home/End, dan roving tab index. Di bawah 640 px selector memiliki dua kolom; mulai 640 px tiga kolom. Scan/sidebar bertumpuk di bawah 1024 px. Edukasi menampilkan banner bergambar dengan overlay Honeydew dan teks di kiri, lalu carousel empat artikel di bawahnya. Desktop menampilkan tiga kartu sekaligus, tablet dua, dan mobile satu dengan petunjuk kartu berikutnya. Carousel memakai scroll snap, tombol sebelumnya/berikutnya dengan state disabled, fokus keyboard, serta swipe native; reduced motion menonaktifkan smooth scroll. Foto ilustrasi disimpan lokal di public/assets/education/ dengan sumber tercatat dalam SOURCES.md. Footer multikolom pada desktop, satu kolom pada mobile. Link feedback mengarah ke form tiga langkah; kebijakan privasi belum aktif dan ditandai dalam pengembangan.
 
 Motion memakai reveal sekali per elemen (350–450 ms), stagger selector 60 ms, stagger artikel 80 ms, transisi panel 200 ms, dan reveal hero berurutan. `ShinyText` menerima `children`, `className`, dan `duration` (default 3 detik) untuk shine Honeydew yang bergerak lembut. Warna teks dasar tetap tersedia jika background clipping tidak didukung. Indikator scroll bergerak tiga kali, lalu berhenti. Form tidak dianimasikan ulang saat mengetik.
 
@@ -134,15 +134,33 @@ Motion memakai reveal sekali per elemen (350–450 ms), stagger selector 60 ms, 
 
 ## Hero video dan fallback
 
-Sumber video persis seperti yang diberikan pada brief, tanpa diunduh ke repository:
+Video hero menggunakan file lokal yang diberikan pengguna (`13381565_1920_1080_30fps.mp4`), disalin tanpa perubahan ke:
 
 ```text
-https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260328_105406_16f4600d-7a92-4292-b96e-b19156c7830a.mp4
+public/assets/video/hero.mp4
 ```
 
-Video dekoratif memakai `autoPlay`, `muted`, `loop`, `playsInline`, `preload="metadata"`, `aria-hidden`, dan tidak memiliki controls. Pemutaran dijeda saat dokumen tidak terlihat; penolakan `play()` ditangani. Latar hitam, overlay merah/hitam, judul, dan CTA tetap lengkap tanpa video. Saat reduced motion aktif, elemen video tidak dirender sehingga tidak memulai request media. Font tetap lokal; video ini adalah satu-satunya aset eksternal yang sengaja dimuat. Input scan tidak pernah dikirim ke sumber video.
+Video dekoratif memakai `autoPlay`, `muted`, `loop`, `playsInline`, `preload="metadata"`, `aria-hidden`, dan tidak memiliki controls. Pemutaran dijeda saat dokumen tidak terlihat; penolakan `play()` ditangani. Latar hitam, overlay merah/hitam, judul, dan CTA tetap lengkap tanpa video. Saat reduced motion aktif, elemen video tidak dirender sehingga tidak memulai request media. URL video mengikuti `import.meta.env.BASE_URL` agar mendukung deployment pada subpath. Video disajikan dari origin aplikasi dan ikut disalin ke build Vite.
 
-Ketersediaan jaringan, codec, dan kebijakan autoplay browser dapat membatasi pemutaran. Video telah terlihat di hero React saat pemeriksaan browser. Penolakan promise `play()` tidak lagi memanggil `pause()` yang dapat membatalkan percobaan pemutaran berikutnya selama siklus StrictMode. Fallback tetap tersedia, dan perubahan reduced motion dapat menghentikan media tanpa memuat ulang halaman.
+Ketersediaan jaringan, codec, dan kebijakan autoplay browser dapat membatasi pemutaran. Penolakan promise `play()` tidak memanggil `pause()` yang dapat membatalkan percobaan pemutaran berikutnya selama siklus StrictMode. Fallback tetap tersedia, dan perubahan reduced motion dapat menghentikan media tanpa memuat ulang halaman.
+
+## Video edukasi
+
+Background edukasi memakai file pengguna `12742138_1920_1080_30fps.mp4`, disalin ke `public/assets/video/education.mp4`. Komponen `BackgroundVideo` digunakan bersama hero dengan sumber dan class CSS terpisah. Video dekoratif berjalan tanpa suara dan berulang, memakai grayscale serta multiply di atas Honeydew agar pola tetap terlihat. Mask memudarkan tepi menuju batas bagian. Posisi absolut mempertahankan ukuran banner dan carousel; foto kartu artikel tetap digunakan. Saat reduced motion aktif atau video gagal dimuat, latar Honeydew tetap tersedia.
+
+## Halaman Feedback
+
+`/feedback` kini menggunakan layout editorial dua kolom dengan tiga langkah: pilih topik, ceritakan, dan tinjau ulang. Empat kategori memiliki field kontekstual, validasi panjang/opsi/email, dan persetujuan privasi wajib. Email dan screenshot JPG/PNG/WebP (maksimal 10 MB) bersifat opsional. Pratinjau memakai object URL lokal yang dibersihkan saat komponen dilepas; tidak ada unggahan, penyimpanan browser, atau request API.
+
+Pilihan topik tampil sebagai empat tombol merah liquid glass (satu kolom vertikal di desktop maupun mobile). Form detail dan review berada dalam satu panel kaca merah; input memakai permukaan merah yang lebih tenang. Isian dikelompokkan dengan fieldset `Isi laporan` dan `Kontak & lampiran`, diikuti persetujuan privasi serta tombol navigasi. Navbar situs disembunyikan khusus pada `/feedback`. Bar atas tetap menyediakan tautan `Kembali ke beranda` dan informasi langkah. Field menampilkan batas karakter sebelum validasi.
+
+Isian dan lampiran dipertahankan selama navigasi antarlangkah. Draf hilang saat halaman dimuat ulang atau pengguna meninggalkan route. Tombol `Kirim Feedback` sengaja dinonaktifkan dengan penjelasan bahwa pengiriman belum tersedia. Tidak ada loading buatan, sukses palsu, atau nomor laporan rekaan.
+
+Entry dari hasil analisis dapat menggunakan React Router state, misalnya `navigate('/feedback', { state: { feedbackCategory: 'detection', scanReference: realScanReference } })`. Gunakan referensi asli yang tersedia dari hasil analisis; jangan memasukkan konten hasil scan atau informasi sensitif ke query parameter. Tanpa referensi, kolom tetap kosong. Kategori lain yang didukung: `bug`, `idea`, dan `other`.
+
+Logika field, tipe data, dan validasi berada di `src/features/feedback/feedbackModel.ts`; komponen detail/review terpisah dari pengatur langkah `FeedbackPage`. Integrasi FastAPI berikutnya perlu menambahkan service memakai transport `src/services/api.ts` setelah kontrak endpoint ditetapkan. Hanya setelah service nyata dipasang, aktifkan pengiriman, status loading yang mencegah submit berulang, retry tanpa menghapus draf, serta status sukses berdasarkan respons server. Referensi laporan hanya ditampilkan bila disediakan server.
+
+Pengujian `npm run check:routes` mencakup route Feedback, form empat kategori, ID elemen unik, field wajib, batas panjang, opsi yang valid, email, persetujuan privasi, dan parsing entry state.
 
 ## Form pemeriksaan lokal
 
@@ -173,3 +191,5 @@ Ketersediaan jaringan, codec, dan kebijakan autoplay browser dapat membatasi pem
 5. Implementasikan fitur secara bertahap dengan persetujuan alur privasi, retensi, dan riwayat opsional.
 
 Jangan menganggap placeholder sebagai kontrol keamanan atau pemeriksaan penipuan yang sudah berfungsi.
+
+

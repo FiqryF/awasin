@@ -25,7 +25,7 @@ export function ScanForm({ config }: Readonly<{ config: ScanConfig }>) {
 
   return (
     <motion.div className="scan-panel" role="tabpanel" id={`panel-${config.id}`} aria-labelledby={`tab-${config.id}`} tabIndex={0}
-      initial={reducedMotion ? false : { opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reducedMotion ? 0 : 0.2 }}>
+      initial={reducedMotion ? false : { opacity: 0, y: 8, filter: 'blur(3px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} transition={{ duration: reducedMotion ? 0 : 0.28, ease: [0.16, 1, 0.3, 1] }}>
       <div className="scan-panel-heading"><h3>{config.title}</h3><p>{config.description}</p></div>
       <form noValidate ref={form} onSubmit={handleSubmit}>
         {(isUrl || config.id === 'message') && <div className="text-field">

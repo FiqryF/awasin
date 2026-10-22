@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, ArrowUpRight } from 'lucide-react'
 import { Link } from 'react-router'
 import { ScrollReveal } from '../components/motion/ScrollReveal'
+import { BackgroundVideo } from '../components/motion/BackgroundVideo'
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion'
 
 const articles = [
@@ -50,10 +51,10 @@ export function EducationSection() {
   }
   return (
     <section id="edukasi" className="education-section" aria-labelledby="education-title">
+      <BackgroundVideo src={`${import.meta.env.BASE_URL}assets/video/education.mp4`} className="education-video" />
+      <div className="education-video-tint" aria-hidden="true" />
       <ScrollReveal>
         <div className="education-banner">
-          <img className="education-banner-image" src={articles[0].image} alt="" loading="lazy" decoding="async" width={1200} height={900} />
-          <div className="education-banner-overlay" aria-hidden="true" />
           <div className="page-width education-banner-inner"><div className="education-banner-copy">
             <p className="section-label">EDUKASI KEAMANAN DIGITAL</p>
             <h2 id="education-title">Cermati link, bukan hanya tampilannya.</h2>

@@ -8,13 +8,17 @@ const server = await createServer({ server: { middlewareMode: true }, appType: '
 try {
   const { AppRoutes } = await server.ssrLoadModule('/src/routes/AppRoutes.tsx')
   const { placeholderRoutes } = await server.ssrLoadModule('/src/routes/routeConfig.ts')
-  const expectedPaths = ['/scan/link', '/scan/message', '/scan/website', '/scan/qr', '/scan/media', '/education', '/feedback', '/login', '/register', '/forgot-password', '/history', '/settings', '/admin', '/admin/domains', '/admin/articles', '/admin/feedback']
+  const expectedPaths = ['/scan/link', '/scan/message', '/scan/website', '/scan/qr', '/scan/media', '/education', '/login', '/register', '/forgot-password', '/history', '/settings', '/admin', '/admin/domains', '/admin/articles', '/admin/feedback']
   assert.deepEqual(placeholderRoutes.map(({ path }) => path), expectedPaths)
-  for (const { path, title } of [{ path: '/', title: 'Jangan asal klik.' }, ...placeholderRoutes, { path: '/tidak-ada', title: 'Halaman tidak ditemukan' }]) {
+  for (const { path, title } of [{ path: '/', title: 'Jangan asal klik.' }, { path: '/feedback', title: 'Ada yang perlu' }, ...placeholderRoutes, { path: '/tidak-ada', title: 'Halaman tidak ditemukan' }]) {
     const html = renderToString(createElement(MemoryRouter, { initialEntries: [path] }, createElement(AppRoutes)))
     assert.ok(html.includes(title), `Missing title: ${path}`)
     assert.equal((html.match(/<h1[\s>]/g) ?? []).length, 1, `Expected one h1: ${path}`)
     assert.ok(html.includes('<main') && html.includes('<footer'), `Missing layout: ${path}`)
+    if (path === '/feedback') {
+      assert.ok(!html.includes('floating-header'), 'Feedback must not render the site navbar')
+      assert.ok(html.includes('Kembali ke beranda'), 'Feedback must provide a home link')
+    }
     if (path === '/') {
       for (const id of ['beranda', 'periksa', 'edukasi']) assert.ok(html.includes(`id="${id}"`), `Missing section: ${id}`)
       assert.equal((html.match(/role="tab"/g) ?? []).length, 6)
@@ -46,6 +50,38 @@ try {
   assert.equal(validateFile({ ...video, size: 50 * 1024 * 1024 }, 'video'), null)
   assert.ok(validateFile({ ...video, size: 50 * 1024 * 1024 + 1 }, 'video'))
   console.log('PASS six scan modes, URL protocols, message lengths, MIME types and file-size boundaries')
+  const { emptyFeedback, feedbackCategories, feedbackFields, validateFeedback, readFeedbackEntry } = await server.ssrLoadModule('/src/features/feedback/feedbackModel.ts')
+  for (const { id } of feedbackCategories) {
+    const categoryHtml = renderToString(createElement(MemoryRouter, { initialEntries: [{ pathname: '/feedback', state: { feedbackCategory: id } }] }, createElement(AppRoutes)))
+    const ids = [...categoryHtml.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1])
+    assert.equal(new Set(ids).size, ids.length, `Duplicate IDs in feedback category: ${id}`)
+    assert.ok(categoryHtml.includes('<form'), `Missing dynamic feedback form: ${id}`)
+    assert.equal((categoryHtml.match(/<form[\s>]/g) ?? []).length, 1, `Expected a single feedback form: ${id}`)
+    assert.ok(categoryHtml.includes('<legend>Isi laporan</legend>'), `Missing report field group: ${id}`)
+    const valid = { ...emptyFeedback, privacy: true, description: 'Masukan yang cukup jelas untuk ditinjau.' }
+    for (const field of feedbackFields[id]) {
+      if (field.required && field.name !== 'description') valid[field.name] = field.options?.[0] ?? 'Judul masukan'
+    }
+    assert.deepEqual(validateFeedback(id, valid), {}, `Valid feedback: ${id}`)
+    assert.ok(validateFeedback(id, { ...valid, description: 'singkat' }).description)
+    assert.ok(validateFeedback(id, { ...valid, privacy: false }).privacy)
+    assert.ok(validateFeedback(id, { ...valid, email: 'invalid' }).email)
+    assert.deepEqual(validateFeedback(id, { ...valid, email: 'nama@contoh.com' }), {})
+    for (const email of ['nama+feedback@sub.contoh.com', ' nama@contoh.com ']) assert.deepEqual(validateFeedback(id, { ...valid, email }), {})
+    for (const email of ['@contoh.com', 'nama@@contoh.com', 'nama@contoh', 'nama@contoh.', 'nama @contoh.com', 'nama@contoh. com', 'na\tma@contoh.com', 'nama@con\ntoh.com', 'nama@con\u00a0toh.com', 'a'.repeat(255), `nama@${'a'.repeat(230)}.`]) {
+      assert.ok(validateFeedback(id, { ...valid, email }).email, `Must reject malformed email: ${email}`)
+    }
+    for (const field of feedbackFields[id]) {
+      assert.ok(validateFeedback(id, { ...valid, [field.name]: 'a'.repeat(field.max + 1) })[field.name])
+      if (field.required) assert.ok(validateFeedback(id, { ...valid, [field.name]: '' })[field.name])
+      if (field.options) assert.ok(validateFeedback(id, { ...valid, [field.name]: 'opsi tidak tersedia' })[field.name])
+    }
+  }
+  assert.deepEqual(readFeedbackEntry(null), { category: null, scanReference: '' })
+  assert.deepEqual(readFeedbackEntry({ feedbackCategory: 'invalid', scanReference: 'x' }), { category: null, scanReference: '' })
+  assert.deepEqual(readFeedbackEntry({ feedbackCategory: 'detection', scanReference: ' test-reference ' }), { category: 'detection', scanReference: 'test-reference' })
+  assert.deepEqual(readFeedbackEntry({ feedbackCategory: 'bug', scanReference: 'x' }), { category: 'bug', scanReference: '' })
+  console.log('PASS feedback categories, required fields, length limits, option allowlists, email, privacy and report entry state')
   const { API_BASE_URL, apiRequest } = await server.ssrLoadModule('/src/services/api.ts')
   const originalFetch = globalThis.fetch
   try {

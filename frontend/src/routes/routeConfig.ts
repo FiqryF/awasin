@@ -10,7 +10,6 @@ export const scanRoutes = [
 export const placeholderRoutes = [
   ...scanRoutes.map((route) => ({ ...route, access: 'public' as const })),
   { path: '/education', title: 'Scam Education Center', access: 'public' },
-  { path: '/feedback', title: 'Feedback', access: 'public' },
   { path: '/login', title: 'Login', access: 'public' },
   { path: '/register', title: 'Register', access: 'public' },
   { path: '/forgot-password', title: 'Forgot Password', access: 'public' },

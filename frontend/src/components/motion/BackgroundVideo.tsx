@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react'
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion'
 
-export const HERO_VIDEO_URL = 'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260328_105406_16f4600d-7a92-4292-b96e-b19156c7830a.mp4'
+export const HERO_VIDEO_URL = `${import.meta.env.BASE_URL}assets/video/hero.mp4`
 
-export function BackgroundVideo() {
+type BackgroundVideoProps = Readonly<{ src?: string; className?: string }>
+
+export function BackgroundVideo({ src = HERO_VIDEO_URL, className = 'hero-video' }: BackgroundVideoProps) {
   const reducedMotion = usePrefersReducedMotion()
   const video = useRef<HTMLVideoElement>(null)
   useEffect(() => {
@@ -19,9 +21,9 @@ export function BackgroundVideo() {
     syncPlayback()
     document.addEventListener('visibilitychange', syncPlayback)
     return () => { document.removeEventListener('visibilitychange', syncPlayback); element.pause() }
-  }, [reducedMotion])
+  }, [reducedMotion, src])
 
   // No video element or media request when reduced motion is enabled.
   if (reducedMotion) return null
-  return <video ref={video} className="hero-video" src={HERO_VIDEO_URL} autoPlay muted loop playsInline preload="metadata" aria-hidden="true" tabIndex={-1} disablePictureInPicture onError={(event) => { event.currentTarget.hidden = true }} />
+  return <video ref={video} className={className} src={src} autoPlay muted loop playsInline preload="metadata" aria-hidden="true" tabIndex={-1} disablePictureInPicture onError={(event) => { event.currentTarget.hidden = true }} />
 }
