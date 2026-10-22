@@ -6,8 +6,8 @@
 .legal-heading > svg { margin-top: 3px; flex-shrink: 0; }
 .legal-heading h2 { font-size: clamp(1.25rem, 2.6vw, 1.75rem); line-height: 1.2; font-weight: 750; letter-spacing: -0.03em; }
 .legal-heading p { margin-top: 8px; font-size: 0.75rem; color: rgb(245 255 233 / 70%); line-height: 1.5; }
-.legal-close { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0; border-radius: 50%; border: 1px solid rgb(245 255 233 / 24%); background: rgb(245 255 233 / 6%); color: #f5ffe9; }
-.legal-close:hover { background: rgb(245 255 233 / 12%); border-color: rgb(245 255 233 / 60%); }
+.legal-close { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0; border-radius: 50%; border: 1px solid rgb(245 255 233 / 24%); background: #121310; color: #f5ffe9; }
+.legal-close:hover { background: #242721; border-color: rgb(245 255 233 / 60%); }
 .legal-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 28px 32px 36px; scrollbar-width: thin; scrollbar-color: #870002 #000; }
 .legal-summary { font-size: 1rem; line-height: 1.75; }
 .legal-status { margin-top: 20px; padding: 16px 20px; border-radius: 16px; background: rgb(135 0 2 / 38%); font-size: 0.875rem; line-height: 1.75; }

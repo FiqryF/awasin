@@ -284,8 +284,8 @@
   .auth-form-header { display: none; width: 100%; margin-bottom: 32px; }
   .auth-form-header .auth-brand { margin-bottom: 0; }
   .auth-form-wrap { width: 100%; max-width: 540px; }
-  .home-back-link { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0; border: 1px solid rgb(245 255 233 / 24%); border-radius: 50%; background: linear-gradient(135deg, rgb(245 255 233 / 10%), rgb(245 255 233 / 3%)), #100e0e; color: #f5ffe9; backdrop-filter: blur(16px); box-shadow: inset 0 1px 1px rgb(245 255 233 / 12%); transition: border-color 180ms, background-color 180ms; }
-  .home-back-link:hover { border-color: #f5ffe9; background-color: rgb(245 255 233 / 8%); }
+  .home-back-link { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0; border: 1px solid rgb(245 255 233 / 24%); border-radius: 50%; background-color: #100e0e; background-image: linear-gradient(135deg, #272623, #171514); color: #f5ffe9; backdrop-filter: blur(16px); box-shadow: inset 0 1px 1px rgb(245 255 233 / 12%); transition: border-color 180ms, background-color 180ms; }
+  .home-back-link:hover { border-color: #f5ffe9; background-color: #20221d; }
   .home-back-link:focus-visible { outline: 2px solid #f5ffe9; outline-offset: 4px; }
   .auth-home-position { position: absolute; top: 36px; left: max(16px, calc((100% - 1280px) / 2 + 16px)); z-index: 20; }
 

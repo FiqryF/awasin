@@ -5,7 +5,7 @@ import { legalDocuments, legalVersion } from './legalContent'
 import type { LegalDocumentKind } from './legalContent'
 import './legal.css'
 
-export function LegalDialog({ kind, onClose }: { kind: LegalDocumentKind; onClose: () => void }) {
+export function LegalDialog({ kind, onClose }: Readonly<{ kind: LegalDocumentKind; onClose: () => void }>) {
   const dialog = useRef<HTMLDialogElement>(null)
   const title = useRef<HTMLHeadingElement>(null)
   const content = legalDocuments[kind]
@@ -19,6 +19,7 @@ export function LegalDialog({ kind, onClose }: { kind: LegalDocumentKind; onClos
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth
     document.body.style.paddingRight = `${Number.parseFloat(getComputedStyle(document.body).paddingRight) + scrollbarWidth}px`
     document.body.style.overflow = 'hidden'
+    element.setAttribute('closedby', 'any')
     element.showModal()
     title.current?.focus({ preventScroll: true })
     return () => {
@@ -32,13 +33,7 @@ export function LegalDialog({ kind, onClose }: { kind: LegalDocumentKind; onClos
   }, [])
 
   return createPortal(
-    <dialog ref={dialog} className="legal-dialog" aria-labelledby="legal-title" aria-describedby="legal-summary"
-      onCancel={(event) => { event.preventDefault(); onClose() }}
-      onClick={(event) => {
-        if (event.target !== event.currentTarget) return
-        const bounds = event.currentTarget.getBoundingClientRect()
-        if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) onClose()
-      }}>
+    <dialog ref={dialog} className="legal-dialog" aria-labelledby="legal-title" aria-describedby="legal-summary" onClose={() => { if (!dialog.current?.open) onClose() }}>
       <header className="legal-header">
         <div className="legal-heading"><Icon size={24} aria-hidden="true" /><div><h2 id="legal-title" tabIndex={-1} ref={title}>{content.title}</h2><p>Diperbarui {legalVersion}</p></div></div>
         <button type="button" className="legal-close" onClick={onClose} aria-label="Tutup dokumen" title="Tutup dokumen"><X size={20} aria-hidden="true" /></button>
