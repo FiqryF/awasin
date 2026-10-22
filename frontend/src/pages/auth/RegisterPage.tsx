@@ -1,10 +1,13 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type SubmitEvent } from 'react'
+import { isValidEmail } from '../../utils/isValidEmail'
 import { Link } from 'react-router'
-import { ArrowRight, ShieldCheck } from 'lucide-react'
+import { ShieldCheck } from 'lucide-react'
 import { AuthLayout } from '../../components/auth/AuthLayout'
 import { FormField } from '../../components/auth/FormField'
 import { PasswordField } from '../../components/auth/PasswordField'
 import { AuthFeedback } from '../../components/auth/AuthFeedback'
+import { LegalDialog } from '../../features/legal/LegalDialog'
+import type { LegalDocumentKind } from '../../features/legal/legalContent'
 
 // ─── Panel identitas kiri ─────────────────────────────────────────────────────
 function RegisterIdentity() {
@@ -36,7 +39,7 @@ function validate(fullName: string, email: string, password: string, confirm: st
   const errs: { fullName?: string; email?: string; password?: string; confirm?: string; agreed?: string } = {}
   if (!fullName.trim()) errs.fullName = 'Nama lengkap wajib diisi.'
   if (!email.trim()) errs.email = 'Email wajib diisi.'
-  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = 'Format email tidak valid.'
+  else if (!isValidEmail(email)) errs.email = 'Format email tidak valid.'
   if (!password) errs.password = 'Kata sandi wajib diisi.'
   else if (password.length < 8) errs.password = 'Kata sandi minimal 8 karakter.'
   if (!confirm) errs.confirm = 'Konfirmasi kata sandi wajib diisi.'
@@ -52,12 +55,13 @@ export function RegisterPage() {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [agreed, setAgreed] = useState(false)
+  const [legalDocument, setLegalDocument] = useState<LegalDocumentKind | null>(null)
   const [errors, setErrors] = useState<{
     fullName?: string; email?: string; password?: string; confirm?: string; agreed?: string
   }>({})
   const [loading, setLoading] = useState(false)
 
-  function handleSubmit(e: FormEvent) {
+  function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const errs = validate(fullName, email, password, confirm, agreed)
     setErrors(errs)
@@ -126,27 +130,27 @@ export function RegisterPage() {
 
           {/* Checkbox persetujuan */}
           <div className="auth-agree-wrap">
-            <label className="auth-agree-label">
+            <div className="auth-agree-label">
               <input
                 id="reg-agree"
                 type="checkbox"
                 className="auth-agree-check"
                 checked={agreed}
+                aria-labelledby="reg-agree-label"
                 onChange={(e) => setAgreed(e.target.checked)}
                 aria-describedby={errors.agreed ? 'reg-agree-error' : undefined}
               />
-              <span>
-                Saya menyetujui{' '}
-                <Link to="/terms" className="auth-link">
+              <span id="reg-agree-label">
+                <label htmlFor="reg-agree">Saya menyetujui</label>{' '}
+                <button type="button" className="auth-link auth-legal-trigger" onClick={() => setLegalDocument('terms')} aria-haspopup="dialog">
                   Ketentuan Penggunaan
-                </Link>{' '}
+                </button>{' '}
                 dan{' '}
-                <Link to="/privacy" className="auth-link">
+                <button type="button" className="auth-link auth-legal-trigger" onClick={() => setLegalDocument('privacy')} aria-haspopup="dialog">
                   Kebijakan Privasi
-                </Link>
-                .
+                </button>{'.'}
               </span>
-            </label>
+            </div>
             {errors.agreed && (
               <p id="reg-agree-error" className="auth-field-error" role="alert">
                 {errors.agreed}
@@ -161,7 +165,6 @@ export function RegisterPage() {
             aria-busy={loading}
           >
             {loading ? 'Memproses…' : 'Buat Akun'}
-            {!loading && <ArrowRight size={18} aria-hidden="true" />}
           </button>
         </form>
 
@@ -172,6 +175,7 @@ export function RegisterPage() {
           </Link>
         </p>
       </div>
+      {legalDocument && <LegalDialog kind={legalDocument} onClose={() => setLegalDocument(null)} />}
     </AuthLayout>
   )
 }

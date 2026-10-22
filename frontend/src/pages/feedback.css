@@ -6,8 +6,6 @@
 .feedback-ribbon:nth-child(2) { top: 45%; right: -38%; width: 85%; height: 46%; animation-duration: 32s; animation-direction: alternate-reverse; }
 .feedback-topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 12px; margin-bottom: 36px; }
 .feedback-topbar > span { color: rgb(245 255 233 / 75%); font-size: 0.75rem; white-space: nowrap; }
-.feedback-home { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 10px 16px; border: 1px solid rgb(245 255 233 / 24%); border-radius: 999px; background: linear-gradient(135deg, rgb(245 255 233 / 10%), rgb(245 255 233 / 3%)); font-size: 0.8rem; font-weight: 550; }
-.feedback-home:hover { border-color: #f5ffe9; background-color: rgb(245 255 233 / 8%); }
 .feedback-layout { display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); gap: clamp(48px, 7vw, 112px); align-items: start; }
 .feedback-editorial { position: sticky; top: 104px; }
 .feedback-eyebrow { font-size: 0.68rem; font-weight: 650; letter-spacing: 0.18em; color: rgb(245 255 233 / 65%); margin-bottom: 28px; }
@@ -96,7 +94,6 @@
 @media (max-width: 767px) {
   .feedback-page { padding-block: 12px 64px; }
   .feedback-topbar { top: 0; margin-bottom: 24px; gap: 8px; }
-  .feedback-home { font-size: 0.75rem; padding-inline: 12px; }
   .feedback-topbar > span { font-size: 0.68rem; }
   .feedback-layout { grid-template-columns: minmax(0, 1fr); gap: 28px; }
   .feedback-editorial { position: static; }

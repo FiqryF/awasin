@@ -1,6 +1,5 @@
-import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router'
-import { ArrowRight, ArrowLeft } from 'lucide-react'
+import { useState, type SubmitEvent } from 'react'
+import { isValidEmail } from '../../utils/isValidEmail'
 import { AuthLayout } from '../../components/auth/AuthLayout'
 import { FormField } from '../../components/auth/FormField'
 import { AuthFeedback } from '../../components/auth/AuthFeedback'
@@ -26,10 +25,10 @@ export function ForgotPasswordPage() {
   const [emailError, setEmailError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  function handleSubmit(e: FormEvent) {
+  function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!email.trim()) { setEmailError('Email wajib diisi.'); return }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setEmailError('Format email tidak valid.'); return }
+    if (!isValidEmail(email)) { setEmailError('Format email tidak valid.'); return }
     setEmailError('')
     setLoading(true)
     // Supabase Auth belum disambungkan.
@@ -37,7 +36,7 @@ export function ForgotPasswordPage() {
   }
 
   return (
-    <AuthLayout panelContent={<ForgotIdentity />}>
+    <AuthLayout panelContent={<ForgotIdentity />} backTo="/login" backLabel="Kembali ke halaman masuk">
       <div className="auth-card">
         <div className="auth-card-head">
           <h2 className="auth-card-title">Lupa Kata Sandi?</h2>
@@ -64,16 +63,9 @@ export function ForgotPasswordPage() {
 
           <button type="submit" className="button button-red auth-submit" disabled={loading} aria-busy={loading}>
             {loading ? 'Memproses…' : 'Kirim Tautan'}
-            {!loading && <ArrowRight size={18} aria-hidden="true" />}
           </button>
         </form>
 
-        <p className="auth-switch">
-          <Link to="/login" className="auth-back-inline">
-            <ArrowLeft size={15} aria-hidden="true" />
-            Kembali ke halaman masuk
-          </Link>
-        </p>
       </div>
     </AuthLayout>
   )

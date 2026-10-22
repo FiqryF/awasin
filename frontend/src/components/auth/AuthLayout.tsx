@@ -1,6 +1,7 @@
 import { Link } from 'react-router'
 import { motion } from 'motion/react'
 import { BrandMark } from '../ui/BrandMark'
+import { HomeBackLink } from '../ui/HomeBackLink'
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion'
 import type { ReactNode } from 'react'
 
@@ -8,13 +9,20 @@ type AuthLayoutProps = {
   children: ReactNode
   /** Konten sisi kiri: headline, tagline, deskripsi singkat. */
   panelContent: ReactNode
+  backTo?: string
+  backLabel?: string
 }
 
-export function AuthLayout({ children, panelContent }: AuthLayoutProps) {
+export function AuthLayout({ children, panelContent, backTo, backLabel }: Readonly<AuthLayoutProps>) {
   const reduced = usePrefersReducedMotion()
 
   return (
     <div className="auth-root">
+      <div className="auth-atmosphere" aria-hidden="true">
+        <span />
+        <span />
+      </div>
+      <HomeBackLink className="auth-home-position" to={backTo} label={backLabel} />
       {/* Sisi kiri — identitas brand */}
       <motion.aside
         className="auth-panel-identity"
@@ -23,14 +31,6 @@ export function AuthLayout({ children, panelContent }: AuthLayoutProps) {
         transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
         aria-hidden="true"
       >
-        {/* Ornamen geometris CSS */}
-        <div className="auth-geo" aria-hidden="true">
-          <div className="auth-geo-ring auth-geo-ring-1" />
-          <div className="auth-geo-ring auth-geo-ring-2" />
-          <div className="auth-geo-ring auth-geo-ring-3" />
-          <div className="auth-geo-trace" />
-        </div>
-
         <div className="auth-identity-inner">
           <Link to="/" className="auth-brand" tabIndex={-1}>
             <BrandMark />
@@ -59,11 +59,6 @@ export function AuthLayout({ children, panelContent }: AuthLayoutProps) {
           {children}
         </motion.div>
 
-        <div className="auth-form-footer">
-          <Link to="/" className="auth-back-link">
-            ← Kembali ke Beranda
-          </Link>
-        </div>
       </div>
     </div>
   )

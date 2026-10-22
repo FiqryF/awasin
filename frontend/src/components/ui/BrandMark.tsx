@@ -1,3 +1,6 @@
 export function BrandMark() {
-  return <svg className="brand-mark" viewBox="0 0 36 36" fill="none" aria-hidden="true"><circle cx="18" cy="18" r="15" stroke="currentColor" strokeWidth="2" /><circle cx="18" cy="18" r="6" className="fill-brand" /></svg>
+  return <span className="brand-mark" aria-hidden="true">
+    <img className="brand-logo brand-logo-honeydew" src={`${import.meta.env.BASE_URL}assets/brand/logo-honeydew.png`} alt="" width={2000} height={2000} decoding="async" />
+    <img className="brand-logo brand-logo-red" src={`${import.meta.env.BASE_URL}assets/brand/logo-blood-red.png`} alt="" width={2000} height={2000} decoding="async" />
+  </span>
 }

@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type SubmitEvent } from 'react'
+import { isValidEmail } from '../../utils/isValidEmail'
 import { Link } from 'react-router'
-import { ArrowRight, ShieldCheck } from 'lucide-react'
+import { ShieldCheck } from 'lucide-react'
 import { AuthLayout } from '../../components/auth/AuthLayout'
 import { FormField } from '../../components/auth/FormField'
 import { PasswordField } from '../../components/auth/PasswordField'
@@ -35,7 +36,7 @@ function LoginIdentity() {
 function validate(email: string, password: string) {
   const errs: { email?: string; password?: string } = {}
   if (!email.trim()) errs.email = 'Email wajib diisi.'
-  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = 'Format email tidak valid.'
+  else if (!isValidEmail(email)) errs.email = 'Format email tidak valid.'
   if (!password) errs.password = 'Kata sandi wajib diisi.'
   return errs
 }
@@ -47,7 +48,7 @@ export function LoginPage() {
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({})
   const [loading, setLoading] = useState(false)
 
-  function handleSubmit(e: FormEvent) {
+  function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const errs = validate(email, password)
     setErrors(errs)
@@ -106,7 +107,6 @@ export function LoginPage() {
             aria-busy={loading}
           >
             {loading ? 'Memproses…' : 'Masuk'}
-            {!loading && <ArrowRight size={18} aria-hidden="true" />}
           </button>
         </form>
 

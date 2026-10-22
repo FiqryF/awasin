@@ -53,7 +53,7 @@ export function FloatingNavbar() {
   return (
     <header ref={header} data-theme={dark ? 'dark' : 'light'} className={`floating-header${compact ? ' is-compact' : ''}`}>
       <div className="navbar-shell">
-        <Link to="/#beranda" className="nav-brand" aria-label="AWASIN, beranda" onClick={() => setOpen(false)}><BrandMark /><span className="wordmark">AWASIN.</span></Link>
+        <Link to="/#beranda" className="nav-brand nav-glass" aria-label="AWASIN, beranda" onClick={() => setOpen(false)}><BrandMark /><span className="wordmark">AWASIN.</span></Link>
         <div className="nav-actions">
           <nav className="desktop-nav nav-glass" aria-label="Navigasi utama">{navigation.map(({ hash, label }) => <Link key={hash} to={destination(hash)} aria-current={isActive(hash) ? 'location' : undefined}>{isActive(hash) && <motion.span className="nav-active-pill" layoutId="header-active-section" initial={false} transition={reducedMotion ? { duration: 0 } : { duration: 0.35, ease: [0.16, 1, 0.3, 1] }} aria-hidden="true" />}{label}</Link>)}<Link to="/feedback" aria-current={pathname === '/feedback' ? 'page' : undefined}>Feedback <ArrowUpRight size={15} aria-hidden="true" /></Link></nav>
           <button type="button" ref={trigger} className="menu-trigger nav-glass" aria-label={open ? 'Tutup menu navigasi' : 'Buka menu navigasi'} aria-expanded={open} aria-controls="mobile-navigation" onClick={() => setOpen(!open)}>{open ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}</button>

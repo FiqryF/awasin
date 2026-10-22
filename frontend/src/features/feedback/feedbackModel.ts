@@ -1,3 +1,5 @@
+import { isValidEmail } from '../../utils/isValidEmail'
+
 export const feedbackCategories = [
   { id: 'detection', title: 'Kesalahan Deteksi', description: 'Laporkan hasil pemeriksaan yang menurutmu tidak tepat.' },
   { id: 'bug', title: 'Laporkan Bug', description: 'Beri tahu kami jika ada fitur atau halaman yang bermasalah.' },
@@ -43,18 +45,6 @@ export const feedbackFields: Record<FeedbackCategory, readonly FeedbackField[]> 
   other: [{ name: 'title', label: 'Judul feedback', max: 120 }, description('Deskripsi feedback')],
 }
 
-function isValidFeedbackEmail(email: string): boolean {
-  if (email.length > 254) return false
-  for (const character of email) {
-    if (character.trim() === '') return false
-  }
-  const separator = email.indexOf('@')
-  if (separator < 1 || separator !== email.lastIndexOf('@')) return false
-  const domain = email.slice(separator + 1)
-  const dot = domain.indexOf('.', 1)
-  return dot > 0 && dot < domain.length - 1
-}
-
 export function validateFeedback(category: FeedbackCategory, draft: FeedbackDraft): FeedbackErrors {
   const errors: FeedbackErrors = {}
   for (const field of feedbackFields[category]) {
@@ -64,7 +54,7 @@ export function validateFeedback(category: FeedbackCategory, draft: FeedbackDraf
     else if (value && field.options && !field.options.includes(value)) errors[field.name] = 'Pilih opsi yang tersedia.'
   }
   const email = draft.email.trim()
-  if (email && !isValidFeedbackEmail(email)) errors.email = 'Masukkan alamat email yang valid, atau kosongkan.'
+  if (email && !isValidEmail(email)) errors.email = 'Masukkan alamat email yang valid, atau kosongkan.'
   if (!draft.privacy) errors.privacy = 'Setujui pernyataan privasi untuk melanjutkan.'
   return errors
 }

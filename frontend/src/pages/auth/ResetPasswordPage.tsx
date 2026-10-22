@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type SubmitEvent } from 'react'
 import { Link } from 'react-router'
 import { ArrowRight } from 'lucide-react'
 import { AuthLayout } from '../../components/auth/AuthLayout'
@@ -27,7 +27,7 @@ export function ResetPasswordPage() {
   const [errors, setErrors] = useState<{ password?: string; confirm?: string }>({})
   const [loading, setLoading] = useState(false)
 
-  function handleSubmit(e: FormEvent) {
+  function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const errs: typeof errors = {}
     if (!password) errs.password = 'Kata sandi baru wajib diisi.'

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useLocation } from 'react-router'
+import { useLocation } from 'react-router'
+import { HomeBackLink } from '../components/ui/HomeBackLink'
 import { ArrowLeft, ArrowUpRight, Check, LockKeyhole } from 'lucide-react'
 import { motion } from 'motion/react'
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion'
@@ -61,7 +62,7 @@ export function FeedbackPage() {
   const title = stepHeadings[step]
   return <section className="feedback-page" aria-labelledby="feedback-page-title">
     <div className="feedback-atmosphere" aria-hidden="true"><span className="feedback-ribbon" /><span className="feedback-ribbon" /></div>
-    <div className="page-width feedback-topbar"><Link to="/" className="feedback-home"><ArrowLeft size={18} aria-hidden="true" />Kembali ke beranda</Link><span>Langkah {step} dari 3</span></div>
+    <div className="page-width feedback-topbar"><HomeBackLink /><span>Langkah {step} dari 3</span></div>
     <div className="page-width feedback-layout">
       <div className="feedback-editorial">
         <p className="feedback-eyebrow">AWASIN / FEEDBACK</p>

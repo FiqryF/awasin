@@ -8,7 +8,7 @@ const server = await createServer({ server: { middlewareMode: true }, appType: '
 try {
   const { AppRoutes } = await server.ssrLoadModule('/src/routes/AppRoutes.tsx')
   const { placeholderRoutes } = await server.ssrLoadModule('/src/routes/routeConfig.ts')
-  const expectedPaths = ['/scan/link', '/scan/message', '/scan/website', '/scan/qr', '/scan/media', '/education', '/login', '/register', '/forgot-password', '/history', '/settings', '/admin', '/admin/domains', '/admin/articles', '/admin/feedback']
+  const expectedPaths = ['/scan/link', '/scan/message', '/scan/website', '/scan/qr', '/scan/media', '/education', '/history', '/settings', '/admin', '/admin/domains', '/admin/articles', '/admin/feedback']
   assert.deepEqual(placeholderRoutes.map(({ path }) => path), expectedPaths)
   for (const { path, title } of [{ path: '/', title: 'Jangan asal klik.' }, { path: '/feedback', title: 'Ada yang perlu' }, ...placeholderRoutes, { path: '/tidak-ada', title: 'Halaman tidak ditemukan' }]) {
     const html = renderToString(createElement(MemoryRouter, { initialEntries: [path] }, createElement(AppRoutes)))
@@ -25,6 +25,20 @@ try {
       assert.ok(html.includes('href="/education"'))
       assert.ok(html.includes('href="#periksa"'))
     }
+    console.log(`PASS ${path}`)
+  }
+  const authRoutes = [
+    { path: '/login', title: 'Selamat Datang Kembali' },
+    { path: '/register', title: 'Bergabung dengan AWASIN' },
+    { path: '/forgot-password', title: 'Lupa Kata Sandi?' },
+    { path: '/reset-password', title: 'Buat Kata Sandi Baru' },
+    { path: '/verify-email', title: 'Cek Emailmu' },
+  ]
+  for (const { path, title } of authRoutes) {
+    const html = renderToString(createElement(MemoryRouter, { initialEntries: [path] }, createElement(AppRoutes)))
+    assert.ok(html.includes(title) && html.includes('auth-root'), `Missing auth page: ${path}`)
+    assert.ok(html.includes('assets/brand/logo-honeydew.png') && html.includes('assets/brand/logo-blood-red.png'), `Missing brand assets: ${path}`)
+    assert.ok(!html.includes('floating-header'), `Unexpected site navbar: ${path}`)
     console.log(`PASS ${path}`)
   }
   const { validateScanInput, validateFile } = await server.ssrLoadModule('/src/features/scan/scanConfig.ts')
@@ -50,6 +64,14 @@ try {
   assert.equal(validateFile({ ...video, size: 50 * 1024 * 1024 }, 'video'), null)
   assert.ok(validateFile({ ...video, size: 50 * 1024 * 1024 + 1 }, 'video'))
   console.log('PASS six scan modes, URL protocols, message lengths, MIME types and file-size boundaries')
+  const { isValidEmail } = await server.ssrLoadModule('/src/utils/isValidEmail.ts')
+  for (const email of ['nama@contoh.com', 'nama+tag@sub.contoh.id', `${'a'.repeat(249)}@b.co`]) {
+    assert.equal(isValidEmail(email), true, `Must accept valid email: ${email}`)
+  }
+  for (const email of ['', '@contoh.com', 'nama@@contoh.com', 'nama@contoh', 'nama@contoh.', 'nama @contoh.com', 'nama@con\ntoh.com', 'nama@con\u00a0toh.com', ' nama@contoh.com ', `${'a'.repeat(250)}@b.co`, `${'a'.repeat(100000)}@b.co`]) {
+    assert.equal(isValidEmail(email), false, 'Must reject malformed or oversized email')
+  }
+  console.log('PASS shared email validation, whitespace, duplicate separators and length boundaries')
   const { emptyFeedback, feedbackCategories, feedbackFields, validateFeedback, readFeedbackEntry } = await server.ssrLoadModule('/src/features/feedback/feedbackModel.ts')
   for (const { id } of feedbackCategories) {
     const categoryHtml = renderToString(createElement(MemoryRouter, { initialEntries: [{ pathname: '/feedback', state: { feedbackCategory: id } }] }, createElement(AppRoutes)))
