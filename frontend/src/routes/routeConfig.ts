@@ -7,12 +7,10 @@ export const scanRoutes = [
 ] as const
 
 // Access groups describe future intent only; authentication is not implemented.
+// /login, /register, /forgot-password, /reset-password, /verify-email sudah menjadi halaman nyata.
 export const placeholderRoutes = [
   ...scanRoutes.map((route) => ({ ...route, access: 'public' as const })),
   { path: '/education', title: 'Scam Education Center', access: 'public' },
-  { path: '/login', title: 'Login', access: 'public' },
-  { path: '/register', title: 'Register', access: 'public' },
-  { path: '/forgot-password', title: 'Forgot Password', access: 'public' },
   { path: '/history', title: 'Scan History', access: 'user' },
   { path: '/settings', title: 'Pengaturan Akun', access: 'user' },
   { path: '/admin', title: 'Administrator', access: 'admin' },
