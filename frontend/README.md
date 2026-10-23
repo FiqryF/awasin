@@ -1,5 +1,33 @@
 # AWASIN frontend
 
+## Phase 2 — integrasi akun
+
+Form akun memakai SDK Supabase, session provider, proteksi route, profil,
+dashboard minimum, dan pemulihan lewat kode email. Login admin maupun pengguna
+cukup email/password, tanpa syarat MFA. Migrasi remote dan konfigurasi Auth sudah
+diterapkan; bootstrap admin pertama berhasil. Role tetap dibaca dari database.
+Setelah persetujuan pemilik proyek, TOTP dan batas durasi sesi AAL1 di Supabase
+sudah dinonaktifkan; faktor authenticator lama dihapus. Verifikasi email saat
+aktivasi/pemulihan dan reautentikasi untuk mengganti password tetap terpisah dari login.
+Lihat [panduan Phase 2](../docs/PHASE_2_IDENTITY.md)
+untuk setup Windows, environment, migrasi/RLS, provisioning admin, batas keamanan,
+dan status pengujian. Jalankan `npm run test` untuk test auth dengan provider mocked.
+
+Untuk menjalankan web dan backend sekaligus dari root repository pada Windows:
+
+```powershell
+.\start-dev.ps1
+```
+
+Perintah memeriksa kedua layanan, memakai ulang server yang sudah sehat, dan
+menjalankan layanan yang belum tersedia di latar belakang. Buka http://localhost:5173.
+Dependensi dan `.env` perlu disiapkan terlebih dahulu sesuai panduan. Script tidak
+menginstal dependensi, mengubah Auth, atau menghentikan proses lain.
+
+Bagian berikut mendokumentasikan tahap frontend sebelumnya: pernyataan belum ada
+auth/backend dan route belum diproteksi di bawah ini sudah digantikan implementasi
+Phase 2. Fitur analisis serta pengiriman feedback tetap belum tersedia.
+
 **Cek Dulu, Lebih Aman.** AWASIN merupakan platform web berbasis AI untuk membantu masyarakat memeriksa indikasi penipuan digital. Frontend memuat landing page responsif dengan form input lokal; belum ada kemampuan analisis keamanan yang berjalan.
 
 ## Stack dan prasyarat

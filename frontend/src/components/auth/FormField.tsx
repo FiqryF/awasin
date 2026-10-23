@@ -13,7 +13,8 @@ type FormFieldProps = InputHTMLAttributes<HTMLInputElement> & {
 export function FormField({ id, label, error, hint, suffix, className, ...rest }: FormFieldProps) {
   const errorId = `${id}-error`
   const hintId = `${id}-hint`
-  const described = [error ? errorId : '', hint ? hintId : ''].filter(Boolean).join(' ') || undefined
+  const described = [error ? errorId : '', hint && !error ? hintId : ''].filter(Boolean).join(' ') || undefined
+  const inputClassName = ['auth-input', error && 'is-invalid', className].filter(Boolean).join(' ')
 
   return (
     <div className="auth-field">
@@ -23,7 +24,7 @@ export function FormField({ id, label, error, hint, suffix, className, ...rest }
       <div className={`auth-input-wrap${suffix ? ' has-suffix' : ''}`}>
         <input
           id={id}
-          className={`auth-input${error ? ' is-invalid' : ''}${className ? ` ${className}` : ''}`}
+          className={inputClassName}
           aria-invalid={error ? 'true' : undefined}
           aria-describedby={described}
           {...rest}

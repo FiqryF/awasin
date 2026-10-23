@@ -40,7 +40,7 @@ export function LegalDialog({ kind, onClose }: Readonly<{ kind: LegalDocumentKin
       </header>
       <div className="legal-body">
         <p className="legal-summary" id="legal-summary">{content.summary}</p>
-        <p className="legal-status"><strong>Versi pengembangan.</strong> Dokumen ini menjelaskan fitur yang tersedia saat ini. Layanan akun, analisis, dan pengiriman feedback belum aktif.</p>
+        <p className="legal-status"><strong>Versi pengembangan.</strong> Layanan akun memerlukan konfigurasi Supabase dan persetujuan aktivasi pengelola. Analisis dan pengiriman feedback belum tersedia.</p>
         <nav className="legal-contents" aria-label="Daftar isi dokumen"><h3>Dalam dokumen ini</h3><ol>{content.sections.map((section, index) => <li key={section.title}><a href={`#legal-section-${index}`} onClick={(event) => { event.preventDefault(); document.getElementById(`legal-section-${index}`)?.scrollIntoView({ block: 'start', behavior: 'instant' }); document.getElementById(`legal-section-${index}`)?.focus({ preventScroll: true }) }}>{section.title}</a></li>)}</ol></nav>
         {content.sections.map((section, index) => <section className="legal-section" key={section.title}>
           <h3 id={`legal-section-${index}`} tabIndex={-1}>{section.title}</h3>

@@ -1,4 +1,7 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
+import { completeCallback } from '../../features/auth/callback'
+import { accountNotice } from '../../features/auth/actions'
 import { Mail, ArrowRight } from 'lucide-react'
 import { AuthLayout } from '../../components/auth/AuthLayout'
 import { AuthFeedback } from '../../components/auth/AuthFeedback'
@@ -20,6 +23,17 @@ function VerifyIdentity() {
 }
 
 export function VerifyEmailPage() {
+  const [message, setMessage] = useState(accountNotice)
+  const [failed, setFailed] = useState(false)
+  const [callbackRequested] = useState(() => typeof window !== 'undefined' && Boolean(window.location.search || window.location.hash))
+  useEffect(() => {
+    if (!callbackRequested) return
+    let active = true
+    void completeCallback().then((kind) => {
+      if (active) setMessage(kind === 'signup' ? 'Email berhasil diverifikasi. Silakan masuk untuk melanjutkan.' : 'Tautan pemulihan harus dibuka melalui halaman reset kata sandi.')
+    }).catch((error: unknown) => { if (active) { setFailed(true); setMessage(error instanceof Error ? error.message : 'Verifikasi gagal.') } })
+    return () => { active = false }
+  }, [callbackRequested])
   return (
     <AuthLayout panelContent={<VerifyIdentity />}>
       <div className="auth-card">
@@ -30,14 +44,11 @@ export function VerifyEmailPage() {
         <div className="auth-card-head">
           <h2 className="auth-card-title">Cek Emailmu</h2>
           <p className="auth-card-subtitle">
-            Kami telah mengirimkan tautan verifikasi. Silakan periksa kotak masuk
-            atau folder spam kamu.
+            Periksa email untuk melanjutkan verifikasi akun.
           </p>
         </div>
 
-        <AuthFeedback type="dev">
-          Pengiriman email verifikasi belum tersedia — Supabase Auth belum terhubung.
-        </AuthFeedback>
+        <AuthFeedback type={failed ? 'error' : 'info'}>{message}</AuthFeedback>
 
         <p className="auth-verify-note">
           Tidak menerima email? Pastikan alamat yang kamu daftarkan sudah benar,

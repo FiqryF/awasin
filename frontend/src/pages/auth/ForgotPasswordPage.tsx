@@ -3,6 +3,8 @@ import { isValidEmail } from '../../utils/isValidEmail'
 import { AuthLayout } from '../../components/auth/AuthLayout'
 import { FormField } from '../../components/auth/FormField'
 import { AuthFeedback } from '../../components/auth/AuthFeedback'
+import { requireSupabase, supabase } from '../../features/auth/client'
+import { createAuthActions } from '../../features/auth/actions'
 
 function ForgotIdentity() {
   return (
@@ -24,15 +26,24 @@ export function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
   const [emailError, setEmailError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
+  const [failed, setFailed] = useState(false)
 
-  function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
+  let feedbackType: 'error' | 'info' | 'dev' = 'dev'
+  if (failed) feedbackType = 'error'
+  else if (message) feedbackType = 'info'
+
+  async function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!email.trim()) { setEmailError('Email wajib diisi.'); return }
     if (!isValidEmail(email)) { setEmailError('Format email tidak valid.'); return }
     setEmailError('')
+    if (loading) return
     setLoading(true)
-    // Supabase Auth belum disambungkan.
-    setTimeout(() => setLoading(false), 800)
+    setMessage(''); setFailed(false)
+    try { setMessage(await createAuthActions(requireSupabase(), window.location.origin).forgot(email)) }
+    catch (error) { setFailed(true); setMessage(error instanceof Error ? error.message : 'Permintaan gagal. Coba lagi nanti.') }
+    finally { setLoading(false) }
   }
 
   return (
@@ -41,13 +52,11 @@ export function ForgotPasswordPage() {
         <div className="auth-card-head">
           <h2 className="auth-card-title">Lupa Kata Sandi?</h2>
           <p className="auth-card-subtitle">
-            Masukkan email untuk menerima tautan pengaturan ulang sandi.
+            Masukkan email untuk menerima kode pemulihan kata sandi.
           </p>
         </div>
 
-        <AuthFeedback type="dev">
-          Pengiriman email pengaturan ulang sandi belum tersedia — Supabase Auth belum terhubung.
-        </AuthFeedback>
+        {(!supabase || message) && <AuthFeedback type={feedbackType}>{message || 'Layanan akun belum dikonfigurasi pada perangkat ini.'}</AuthFeedback>}
 
         <form onSubmit={handleSubmit} noValidate className="auth-form" aria-label="Form lupa kata sandi">
           <FormField
@@ -62,9 +71,10 @@ export function ForgotPasswordPage() {
           />
 
           <button type="submit" className="button button-red auth-submit" disabled={loading} aria-busy={loading}>
-            {loading ? 'Memproses…' : 'Kirim Tautan'}
+            {loading ? 'Memproses…' : 'Kirim Kode Pemulihan'}
           </button>
         </form>
+        {message && !failed && <p className="auth-switch"><a className="button button-red auth-submit" href="/reset-password">Masukkan kode dari email</a></p>}
 
       </div>
     </AuthLayout>

@@ -1,6 +1,9 @@
 import { useState, type SubmitEvent } from 'react'
 import { isValidEmail } from '../../utils/isValidEmail'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
+import { requireSupabase, supabase } from '../../features/auth/client'
+import { createAuthActions } from '../../features/auth/actions'
+import { passwordError } from '../../features/auth/policy'
 import { ShieldCheck } from 'lucide-react'
 import { AuthLayout } from '../../components/auth/AuthLayout'
 import { FormField } from '../../components/auth/FormField'
@@ -37,11 +40,11 @@ function RegisterIdentity() {
 // ─── Validasi sederhana sisi klien ────────────────────────────────────────────
 function validate(fullName: string, email: string, password: string, confirm: string, agreed: boolean) {
   const errs: { fullName?: string; email?: string; password?: string; confirm?: string; agreed?: string } = {}
-  if (!fullName.trim()) errs.fullName = 'Nama lengkap wajib diisi.'
+  if (!fullName.trim() || fullName.trim().length > 100) errs.fullName = 'Nama lengkap wajib diisi, maksimal 100 karakter.'
   if (!email.trim()) errs.email = 'Email wajib diisi.'
   else if (!isValidEmail(email)) errs.email = 'Format email tidak valid.'
   if (!password) errs.password = 'Kata sandi wajib diisi.'
-  else if (password.length < 8) errs.password = 'Kata sandi minimal 8 karakter.'
+  else if (passwordError(password)) errs.password = passwordError(password)!
   if (!confirm) errs.confirm = 'Konfirmasi kata sandi wajib diisi.'
   else if (confirm !== password) errs.confirm = 'Kata sandi tidak cocok.'
   if (!agreed) errs.agreed = 'Kamu harus menyetujui ketentuan untuk melanjutkan.'
@@ -60,16 +63,24 @@ export function RegisterPage() {
     fullName?: string; email?: string; password?: string; confirm?: string; agreed?: string
   }>({})
   const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
+  const navigate = useNavigate()
 
-  function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
+  async function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const errs = validate(fullName, email, password, confirm, agreed)
     setErrors(errs)
     if (Object.keys(errs).length > 0) return
 
-    // Supabase Auth belum disambungkan — tampilkan status jujur.
+    if (loading) return
     setLoading(true)
-    setTimeout(() => setLoading(false), 800)
+    setMessage('')
+    try {
+      const notice = await createAuthActions(requireSupabase(), window.location.origin).register(email, password, confirm, fullName)
+      setPassword(''); setConfirm('')
+      await navigate('/verify-email', { state: { notice } })
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Pendaftaran belum dapat diproses.') }
+    finally { setLoading(false) }
   }
 
   return (
@@ -82,9 +93,7 @@ export function RegisterPage() {
           </p>
         </div>
 
-        <AuthFeedback type="dev">
-          Pendaftaran sedang dalam pengembangan — integrasi Supabase Auth belum tersedia.
-        </AuthFeedback>
+        {(!supabase || message) && <AuthFeedback type={message ? 'error' : 'dev'}>{message || 'Layanan akun belum dikonfigurasi pada perangkat ini.'}</AuthFeedback>}
 
         <form onSubmit={handleSubmit} noValidate className="auth-form" aria-label="Form pendaftaran">
           <FormField
@@ -115,7 +124,7 @@ export function RegisterPage() {
             value={password}
             onChange={setPassword}
             autoComplete="new-password"
-            hint="Minimal 8 karakter."
+            hint="Gunakan 12–128 karakter."
             error={errors.password}
           />
 

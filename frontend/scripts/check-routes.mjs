@@ -8,10 +8,13 @@ const server = await createServer({ server: { middlewareMode: true }, appType: '
 try {
   const { AppRoutes } = await server.ssrLoadModule('/src/routes/AppRoutes.tsx')
   const { placeholderRoutes } = await server.ssrLoadModule('/src/routes/routeConfig.ts')
+  const { AuthContext } = await server.ssrLoadModule('/src/features/auth/context.ts')
+  // Rendering fixtures only: real route authorization is tested separately.
+  const fixtureIdentity = { id: 'ssr-fixture', email: 'local@example.invalid', role: 'admin', aal: 'aal2', profile: { id: 'ssr-fixture', display_name: 'SSR fixture' } }
   const expectedPaths = ['/scan/link', '/scan/message', '/scan/website', '/scan/qr', '/scan/media', '/education', '/history', '/settings', '/admin', '/admin/domains', '/admin/articles', '/admin/feedback']
   assert.deepEqual(placeholderRoutes.map(({ path }) => path), expectedPaths)
   for (const { path, title } of [{ path: '/', title: 'Jangan asal klik.' }, { path: '/feedback', title: 'Ada yang perlu' }, ...placeholderRoutes, { path: '/tidak-ada', title: 'Halaman tidak ditemukan' }]) {
-    const html = renderToString(createElement(MemoryRouter, { initialEntries: [path] }, createElement(AppRoutes)))
+    const html = renderToString(createElement(AuthContext.Provider, { value: { loading: false, identity: fixtureIdentity, error: '', refresh: async () => fixtureIdentity } }, createElement(MemoryRouter, { initialEntries: [path] }, createElement(AppRoutes))))
     assert.ok(html.includes(title), `Missing title: ${path}`)
     assert.equal((html.match(/<h1[\s>]/g) ?? []).length, 1, `Expected one h1: ${path}`)
     assert.ok(html.includes('<main') && html.includes('<footer'), `Missing layout: ${path}`)

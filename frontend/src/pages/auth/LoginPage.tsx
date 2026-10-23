@@ -1,6 +1,10 @@
 import { useState, type SubmitEvent } from 'react'
 import { isValidEmail } from '../../utils/isValidEmail'
-import { Link } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
+import { requireSupabase, supabase } from '../../features/auth/client'
+import { createAuthActions } from '../../features/auth/actions'
+import { fetchIdentity } from '../../features/auth/identity'
+import { identityDestination, safeReturnPath } from '../../features/auth/policy'
 import { ShieldCheck } from 'lucide-react'
 import { AuthLayout } from '../../components/auth/AuthLayout'
 import { FormField } from '../../components/auth/FormField'
@@ -47,16 +51,30 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({})
   const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
+  const navigate = useNavigate()
+  const { state } = useLocation()
 
-  function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
+  async function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const errs = validate(email, password)
     setErrors(errs)
     if (Object.keys(errs).length > 0) return
 
-    // Supabase Auth belum disambungkan — tampilkan status jujur.
+    if (loading) return
     setLoading(true)
-    setTimeout(() => setLoading(false), 800)
+    setMessage('')
+    try {
+      const session = await createAuthActions(requireSupabase(), window.location.origin).login(email, password)
+      setPassword('')
+      const identity = await fetchIdentity(session.access_token)
+      const requested = safeReturnPath(state?.returnTo)
+      let destination = '/dashboard'
+      if (identity.role === 'admin') destination = identityDestination(identity)
+      else if (requested && !requested.startsWith('/admin')) destination = requested
+      await navigate(destination, { replace: true })
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Tidak dapat masuk. Coba lagi.') }
+    finally { setLoading(false) }
   }
 
   return (
@@ -69,9 +87,7 @@ export function LoginPage() {
           </p>
         </div>
 
-        <AuthFeedback type="dev">
-          Fitur masuk sedang dalam pengembangan — integrasi Supabase Auth belum tersedia.
-        </AuthFeedback>
+        {(!supabase || message) && <AuthFeedback type={message ? 'error' : 'dev'}>{message || 'Layanan akun belum dikonfigurasi pada perangkat ini.'}</AuthFeedback>}
 
         <form onSubmit={handleSubmit} noValidate className="auth-form" aria-label="Form masuk">
           <FormField

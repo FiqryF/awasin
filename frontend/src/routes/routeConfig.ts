@@ -6,7 +6,7 @@ export const scanRoutes = [
   { path: '/scan/media', title: 'AI Media Authenticity Analyzer', description: 'Tinjau indikasi manipulasi pada gambar dan video.', icon: 'media' },
 ] as const
 
-// Access groups describe future intent only; authentication is not implemented.
+// Non-public routes require a server-verified identity; admin routes require the current database admin role.
 // /login, /register, /forgot-password, /reset-password, /verify-email sudah menjadi halaman nyata.
 export const placeholderRoutes = [
   ...scanRoutes.map((route) => ({ ...route, access: 'public' as const })),
