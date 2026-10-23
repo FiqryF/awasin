@@ -12,7 +12,7 @@ export function createAuthActions(client: SupabaseClient, origin: string) {
   return {
     async register(email: string, password: string, confirm: string, name: string) {
       if (!isValidEmail(email.trim()) || passwordError(password) || password !== confirm || !name.trim() || name.trim().length > 100) {
-        throw new Error('Periksa email, nama, dan konfirmasi kata sandi 12–128 karakter.')
+        throw new Error('Periksa data pendaftaran dan konfirmasi kata sandi.')
       }
       const { data, error } = await client.auth.signUp({ email: email.trim(), password, options: { data: { display_name: name.trim() }, emailRedirectTo: callback('/verify-email') } })
       if (error && !['user_already_exists', 'email_exists'].includes(error.code ?? '')) throw new Error('Pendaftaran belum dapat diproses. Coba lagi nanti.')

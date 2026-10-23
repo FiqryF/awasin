@@ -127,7 +127,7 @@ export function ResetPasswordPage() {
             value={password}
             onChange={setPassword}
             autoComplete="new-password"
-            hint="Gunakan 12–128 karakter."
+            hint="Minimal 8 karakter."
             error={errors.password}
           />
           <PasswordField

@@ -120,6 +120,10 @@ describe('routing and session state', () => {
     expect(identityDestination({ role: 'admin', aal: 'aal1' })).toBe('/admin/dashboard')
     expect(identityDestination({ role: 'admin', aal: 'aal2' })).toBe('/admin/dashboard')
     expect(passwordError('short')).toBeTruthy()
+    expect(passwordError('a'.repeat(7))).toBe('Minimal 8 karakter.')
+    expect(passwordError('a'.repeat(8))).toBeNull()
+    expect(passwordError('a'.repeat(128))).toBeNull()
+    expect(passwordError('a'.repeat(129))).toBe('Maksimal 128 karakter.')
   })
   it.each([
     [{ loading: true, identity: null, error: '' }, false, 'Memverifikasi sesi'],

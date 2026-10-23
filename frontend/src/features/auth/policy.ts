@@ -1,6 +1,7 @@
 export function passwordError(password: string): string | null {
-  return password.length < 12 || password.length > 128
-    ? 'Gunakan kata sandi 12–128 karakter. Hindari kata sandi yang pernah digunakan.' : null
+  if (password.length < 8) return 'Minimal 8 karakter.'
+  if (password.length > 128) return 'Maksimal 128 karakter.'
+  return null
 }
 
 // Return only known internal destinations, never arbitrary paths from URL/state.
