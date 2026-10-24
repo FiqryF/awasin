@@ -10,10 +10,10 @@ function VerifyIdentity() {
   return (
     <div className="auth-identity-copy">
       <p className="auth-identity-tagline section-label">Hampir Selesai.</p>
-      <h1 className="auth-identity-headline">
+      <p className="auth-identity-headline">
         Verifikasi<br />
         <span className="auth-identity-accent">alamat emailmu.</span>
-      </h1>
+      </p>
       <p className="auth-identity-desc">
         Satu langkah lagi untuk mengaktifkan akun dan mulai menggunakan
         semua fitur AWASIN.
@@ -42,7 +42,7 @@ export function VerifyEmailPage() {
         </div>
 
         <div className="auth-card-head">
-          <h2 className="auth-card-title">Cek Emailmu</h2>
+          <h1 className="auth-card-title">Cek Emailmu</h1>
           <p className="auth-card-subtitle">
             Periksa email untuk melanjutkan verifikasi akun.
           </p>

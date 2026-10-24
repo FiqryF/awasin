@@ -15,10 +15,10 @@ function ResetIdentity() {
   return (
     <div className="auth-identity-copy">
       <p className="auth-identity-tagline section-label">Kata Sandi Baru.</p>
-      <h1 className="auth-identity-headline">
+      <p className="auth-identity-headline">
         Buat kata sandi<br />
         <span className="auth-identity-accent">yang kuat.</span>
-      </h1>
+      </p>
       <p className="auth-identity-desc">
         Pilih kata sandi yang unik dan belum pernah kamu pakai sebelumnya
         untuk menjaga akun tetap aman.
@@ -30,7 +30,7 @@ function ResetIdentity() {
 export function ResetPasswordPage() {
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
-  const [hasCallback] = useState(() => Boolean(window.location.search || window.location.hash))
+  const [hasCallback] = useState(() => typeof window !== 'undefined' && Boolean(window.location.search || window.location.hash))
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [errors, setErrors] = useState<{ password?: string; confirm?: string }>({})
@@ -105,7 +105,7 @@ export function ResetPasswordPage() {
     <AuthLayout panelContent={<ResetIdentity />}>
       <div className="auth-card">
         <div className="auth-card-head">
-          <h2 className="auth-card-title">Buat Kata Sandi Baru</h2>
+          <h1 className="auth-card-title">Buat Kata Sandi Baru</h1>
           <p className="auth-card-subtitle">
             Masukkan kode dari email terbaru, lalu buat kata sandi baru.
           </p>

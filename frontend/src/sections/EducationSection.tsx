@@ -4,13 +4,7 @@ import { Link } from 'react-router'
 import { ScrollReveal } from '../components/motion/ScrollReveal'
 import { BackgroundVideo } from '../components/motion/BackgroundVideo'
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion'
-
-const articles = [
-  { category: 'Phishing', title: 'Cermati link, bukan hanya tampilannya.', description: 'Alamat website palsu sering meniru nama merek atau menambahkan subdomain yang menyesatkan. Periksa domain yang benar sebelum memasukkan data.', action: 'Pelajari phishing', image: '/assets/education/phishing.jpg' },
-  { category: 'Modus pesan', title: 'Waspadai pesan yang membuat panik.', description: 'Ancaman pemblokiran akun dan tenggat waktu mendadak kerap digunakan untuk memaksa orang bertindak tanpa berpikir.', action: 'Kenali modus pesan', image: '/assets/education/message.jpg' },
-  { category: 'Keamanan QR', title: 'QR Code juga bisa menipu.', description: 'Kode QR dapat menyimpan tautan ke halaman tiruan. Lihat alamat tujuan sebelum membukanya.', action: 'Pelajari risiko QR', image: '/assets/education/qr.jpg' },
-  { category: 'Keaslian media', title: 'Gambar dan video perlu diverifikasi.', description: 'Konten sintetis bisa terlihat meyakinkan. Periksa konteks, sumber asli, dan bukti lain sebelum mempercayainya.', action: 'Kenali manipulasi media', image: '/assets/education/media.jpg' },
-]
+import { articles } from '../features/education/articles'
 
 function EducationArticle({ article }: Readonly<{ article: typeof articles[number] }>) {
   return (
@@ -20,13 +14,13 @@ function EducationArticle({ article }: Readonly<{ article: typeof articles[numbe
         <span className="article-category">{article.category}</span>
         <h4>{article.title}</h4>
         <p>{article.description}</p>
-        <Link to="/education" className="article-action" aria-label={`${article.action}: ${article.title} (dalam pengembangan)`}>Baca artikel <ArrowUpRight size={17} aria-hidden="true" /></Link>
+        <Link to={`/education/${article.slug}`} className="article-action" aria-label={`${article.action}: ${article.title}`}>Baca artikel <ArrowUpRight size={17} aria-hidden="true" /></Link>
       </div>
     </article>
   )
 }
 
-export function EducationSection() {
+export function EducationSection({ personalized = false }: Readonly<{ personalized?: boolean }>) {
   const track = useRef<HTMLElement>(null)
   const reducedMotion = usePrefersReducedMotion()
   const [controls, setControls] = useState({ previous: false, next: true })
@@ -57,7 +51,7 @@ export function EducationSection() {
         <div className="education-banner">
           <div className="page-width education-banner-inner"><div className="education-banner-copy">
             <p className="section-label">EDUKASI KEAMANAN DIGITAL</p>
-            <h2 id="education-title">Cermati link, bukan hanya tampilannya.</h2>
+            <h2 id="education-title">{personalized ? 'Kenali Modusnya, Hindari Risikonya.' : 'Cermati link, bukan hanya tampilannya.'}</h2>
             <p>Penipuan makin pintar. Kita juga harus. Kenali tanda phishing sebelum membuka tautan atau memasukkan data pribadi.</p>
             <div className="education-banner-actions"><Link to="/education" className="button button-red">Baca artikel <ArrowUpRight size={18} aria-hidden="true" /></Link><a href="#topik-edukasi" className="button education-topics-link">Lihat topik lain</a></div>
           </div></div>
@@ -71,7 +65,7 @@ export function EducationSection() {
         <section ref={track} id="education-carousel" className="education-carousel" aria-label="Topik edukasi, geser untuk melihat artikel lainnya" onScroll={updateControls}>{articles.map((article, index) => (
           <ScrollReveal key={article.title} className="article-reveal" delay={(index + 1) * 0.08}><EducationArticle article={article} /></ScrollReveal>
         ))}</section>
-        <p className="education-note">Pratinjau topik edukasi. Artikel lengkap sedang disiapkan.</p>
+        <p className="education-note"><Link className="auth-link" to="/education">Jelajahi semua topik edukasi</Link></p>
       </div>
     </section>
   )

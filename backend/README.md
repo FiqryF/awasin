@@ -1,21 +1,20 @@
 # AWASIN Backend — Foundation & Identity
 
-## Phase 2 implementation status
+## Status implementasi Phase 1–4
 
-Identity code extends this foundation. Setup, security decisions, migration,
-admin provisioning, provider activation and test boundaries are documented in
-[Phase 2 identity](../docs/PHASE_2_IDENTITY.md). The approved migration and first-admin
-bootstrap have been applied. Admin access requires a valid authenticated session
-and current database admin role; it no longer requires aal2/MFA at the owner's
-request. Cross-user RLS integration checks remain pending.
-The Phase 1 description below is historical; current CORS also permits PATCH and
-Authorization, and the app has a lifespan-managed HTTPX client for identity calls.
-Current protected endpoints: GET `/api/v1/auth/me`, PATCH `/api/v1/profiles/me`, GET
-`/api/v1/admin/identity`. Health remains public without Supabase configuration.
+Lihat [laporan progres lengkap](../AWASIN_PROGRESS_PHASE_1_4.md) untuk status,
+endpoint, migrasi, keamanan dan hasil pengujian terkini. Konfigurasi identitas/admin
+yang sudah ada dipertahankan; role admin tetap diverifikasi dari database tanpa
+menambahkan syarat MFA baru. API kini meliputi profil, preferensi, riwayat, ekspor
+dan penerimaan Feedback. CORS mengizinkan GET/PATCH/POST/DELETE dari origin terdaftar.
+Migrasi 002–004 diuji di PostgreSQL lokal; penerapan serta pengujian integrasi ke
+Supabase aktif belum dilakukan dalam rangkaian phase ini. Health tetap publik
+tanpa konfigurasi Supabase. Dokumen fondasi di bawah sebagian bersifat historis.
 
 Fondasi API proses AWASIN. Implementasi ini menyediakan konfigurasi, routing,
 health check, dokumentasi OpenAPI, CORS, logging, dan penanganan error.
-Belum ada autentikasi, analisis keamanan, database, atau koneksi Supabase.
+Engine analisis keamanan belum tersedia. Operasi data memerlukan konfigurasi
+Supabase serta migrasi yang sesuai dan tidak menghasilkan sukses palsu bila gagal.
 
 ## Teknologi dan struktur
 
@@ -46,9 +45,9 @@ backend/
 ```
 
 Modular monolith dengan batas HTTP, konfigurasi operasional, dan modul health.
-Belum diperlukan service/repository/database layer atau lifespan hook karena
-tidak ada resource eksternal yang perlu dikelola. File `__init__.py` menandai
-package Python; tidak ada modul fitur cadangan kosong.
+Lifespan kini mengelola HTTP client Supabase dan pembatas permintaan Feedback.
+Modul identity, history dan feedback melengkapi fondasi health di atas. Struktur
+diagram tersebut mencatat tahap awal; lihat laporan progres untuk komponen terkini.
 
 ## Setup Windows (PowerShell)
 
@@ -57,6 +56,7 @@ Dari root repository:
 ```powershell
 cd backend
 py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade "pip>=26.2,<27"
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 Copy-Item .env.example .env
 .\.venv\Scripts\python.exe -m app
@@ -73,6 +73,7 @@ Dari root repository:
 ```bash
 cd backend
 python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade 'pip>=26.2,<27'
 .venv/bin/python -m pip install -e '.[dev]'
 cp .env.example .env
 .venv/bin/python -m app
@@ -185,15 +186,17 @@ dependency baru hanya untuk menghilangkan peringatan ini.
 
 ## Batasan dan tahap berikutnya
 
-- CORS hanya mengizinkan GET dan header Accept/Content-Type, tanpa credentials.
-  Ini kebijakan Phase 1, bukan autentikasi atau penghalang client non-browser.
-- Belum ada JWT, role admin, rate limit, upload, SSRF filtering, storage atau scan.
-  Tidak ada endpoint login/register dan tidak ada hasil pemeriksaan buatan.
+- CORS mengizinkan GET/PATCH/POST/DELETE dan Authorization untuk origin terdaftar,
+  tanpa cookie credentials. CORS bukan pengganti autentikasi atau pembatas client non-browser.
+- JWT, identitas/role, ownership, preferensi, riwayat dan Feedback sudah diimplementasikan.
+  Upload ke server, storage media dan engine scan belum ada; tidak ada hasil buatan.
+  Pembatas Feedback per worker dan kuota RPC tersedia, tetapi deployment multiworker
+  memerlukan strategi pembatas terdistribusi/trusted gateway yang sesuai.
 - Tidak ada konfigurasi deployment, TLS termination atau database readiness probe.
 - Dependency memiliki batas versi di pyproject; belum ada lockfile Python lintas
   platform. Instalasi baru dapat memilih patch/minor yang berbeda.
-- Frontend tetap independen; helper API belum dihubungkan. Integrasi berikutnya
-  perlu menyepakati payload/error, authorization header, CORS dan respons UI.
-- Phase 2 perlu keputusan identitas, verifikasi JWT Supabase, otorisasi, model
-  data/RLS, privasi dan retensi. Jangan memasukkan service-role key ke browser.
-  Tidak ada akses maupun perubahan terhadap Supabase dalam Phase 1.
+- Frontend menggunakan kontrak API akun, history dan Feedback. Penerapan migrasi
+  002–004 serta verifikasi dua akun pada Supabase aktif masih perlu dilakukan.
+- Retensi Feedback, prosedur penghapusan akun dan keamanan upload/engine perlu
+  diputuskan sebelum fitur terkait diaktifkan untuk produksi. Jangan memasukkan
+  service-role key ke browser. Phase 4 tidak mengubah konfigurasi Supabase aktif.

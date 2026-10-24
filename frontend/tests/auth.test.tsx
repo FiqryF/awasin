@@ -10,9 +10,10 @@ import { AuthContext } from '../src/features/auth/context'
 import { AuthProvider } from '../src/features/auth/AuthProvider'
 import { fetchIdentity } from '../src/features/auth/identity'
 import { useAuth } from '../src/features/auth/useAuth'
+import { LoginPage } from '../src/pages/auth/LoginPage'
 
 const mock = vi.hoisted(() => ({
-  getSession: vi.fn(), onAuthStateChange: vi.fn(), exchangeCodeForSession: vi.fn(),
+  getSession: vi.fn(), onAuthStateChange: vi.fn(), exchangeCodeForSession: vi.fn(), signOut: vi.fn(),
 }))
 vi.mock('../src/features/auth/client', () => ({
   supabase: { auth: mock }, requireSupabase: () => ({ auth: mock }),
@@ -21,15 +22,22 @@ vi.mock('../src/features/auth/identity', () => ({ fetchIdentity: vi.fn() }))
 
 const verified = { id: 'local-user', email: 'local@example.invalid', role: 'user' as const, aal: 'aal1' as const, profile: { id: 'local-user', display_name: 'Test' } }
 const cleanups: (() => void)[] = []
-let authEvent: (event: string, session: { access_token: string } | null) => void
+let authEvent: (event: string, session: { access_token: string; user?: { id: string } } | null) => void
 
 beforeEach(() => {
+  window.matchMedia = vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })) as unknown as typeof window.matchMedia
+  localStorage.clear()
+  sessionStorage.clear()
+  mock.signOut.mockResolvedValue({ error: null })
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   mock.getSession.mockResolvedValue({ data: { session: null }, error: null })
   mock.onAuthStateChange.mockImplementation((callback) => { authEvent = callback; return { data: { subscription: { unsubscribe: vi.fn() } } } })
   vi.mocked(fetchIdentity).mockResolvedValue(verified)
 })
-afterEach(async () => { for (const cleanup of cleanups.splice(0)) await act(async () => cleanup()) })
+afterEach(async () => {
+  for (const cleanup of cleanups.splice(0)) await act(async () => cleanup())
+  vi.useRealTimers()
+})
 
 async function render(element: React.ReactNode) {
   const container = document.createElement('div')
@@ -42,6 +50,7 @@ async function render(element: React.ReactNode) {
 
 function fakeClient() {
   const auth = {
+    getSession: vi.fn().mockResolvedValue({ data: { session: {} }, error: null }),
     signUp: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
     signInWithPassword: vi.fn().mockResolvedValue({ data: { session: { access_token: crypto.randomUUID() }, user: { email_confirmed_at: '2026-01-01' } }, error: null }),
     resetPasswordForEmail: vi.fn().mockResolvedValue({ error: null }),
@@ -100,6 +109,13 @@ describe('account actions using mocked Supabase SDK', () => {
     auth.signOut.mockResolvedValue({ error: {} } as never)
     await expect(actions.logout()).rejects.toThrow()
   })
+  it('finishes device logout when SDK already cleared the session after a network error', async () => {
+    const { actions, auth } = fakeClient()
+    auth.signOut.mockResolvedValue({ error: { name: 'AuthRetryableFetchError' } } as never)
+    auth.getSession.mockResolvedValue({ data: { session: null }, error: null } as never)
+    await expect(actions.logout()).resolves.toBeUndefined()
+    expect(sessionStorage.getItem('awasin.session-notice')).toBe('local-only')
+  })
   it('distinguishes unavailable login transport from invalid credentials', async () => {
     const { actions, auth } = fakeClient()
     auth.signInWithPassword.mockResolvedValue({ data: { session: null, user: null }, error: { name: 'AuthRetryableFetchError', status: 0 } } as never)
@@ -113,6 +129,25 @@ describe('account actions using mocked Supabase SDK', () => {
 })
 
 describe('routing and session state', () => {
+  it('routes an already verified login page through the shared identity', async () => {
+    const host = await render(<AuthContext.Provider value={{ identity: verified, loading: false, error: '', refresh: async () => verified }}><MemoryRouter initialEntries={['/login']}><Routes><Route path="/login" element={<LoginPage />} /><Route path="/dashboard" element={<p>ACCOUNT HOME</p>} /></Routes></MemoryRouter></AuthContext.Provider>)
+    expect(host.textContent).toBe('ACCOUNT HOME')
+  })
+  it('shares an in-flight identity check between SDK events and explicit refresh', async () => {
+    let refresh!: () => Promise<unknown>
+    function Probe() { const auth = useAuth(); refresh = auth.refresh; return <p>{auth.identity?.email ?? 'GUEST'}</p> }
+    const host = await render(<AuthProvider><Probe /></AuthProvider>)
+    let finish!: (value: typeof verified) => void
+    vi.mocked(fetchIdentity).mockImplementation(() => new Promise(resolve => { finish = resolve }))
+    const session = { access_token: 'shared-session', user: { id: verified.id } }
+    mock.getSession.mockResolvedValue({ data: { session }, error: null })
+    await act(async () => authEvent('SIGNED_IN', session))
+    let result!: Promise<unknown>
+    await act(async () => { result = refresh() })
+    expect(fetchIdentity).toHaveBeenCalledTimes(1)
+    await act(async () => { finish(verified); await result })
+    expect(host.textContent).toBe(verified.email)
+  })
   it('rejects external/encoded/unapproved return URLs and enforces role destinations', () => {
     for (const input of ['https://evil.example', '//evil.example', '/%2f/evil', '/dashboard?redirect=evil', '/admin/unknown']) expect(safeReturnPath(input)).toBeNull()
     expect(safeReturnPath('/history')).toBe('/history')
@@ -157,6 +192,38 @@ describe('routing and session state', () => {
     await act(async () => finish(verified))
     expect(container.textContent).toBe('GUEST')
   })
+  it('redirects protected content after idle expiry even if tokens refresh in the background', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
+    const token = (expiry: number) => `header.${btoa(JSON.stringify({ session_id: 'idle-test', exp: expiry }))}.signature`
+    mock.getSession.mockResolvedValue({ data: { session: { access_token: token(1), user: { id: verified.id } } }, error: null })
+    const host = await render(<AuthProvider><MemoryRouter initialEntries={['/private']}><Routes><Route element={<ProtectedRoute />}><Route path="/private" element={<p>PRIVATE CONTENT</p>} /></Route><Route path="/login" element={<p>LOGIN</p>} /></Routes></MemoryRouter></AuthProvider>)
+    expect(host.textContent).toBe('PRIVATE CONTENT')
+    await act(async () => { vi.advanceTimersByTime(59 * 60_000) })
+    await act(async () => authEvent('TOKEN_REFRESHED', { access_token: token(2), user: { id: verified.id } }))
+    await act(async () => { vi.advanceTimersByTime(60_000) })
+    expect(host.textContent).toBe('LOGIN')
+    expect(mock.signOut).toHaveBeenCalledWith({ scope: 'local' })
+    await act(async () => authEvent('TOKEN_REFRESHED', { access_token: token(3), user: { id: verified.id } }))
+    expect(host.textContent).toBe('LOGIN')
+    expect(mock.signOut).toHaveBeenCalledTimes(1)
+  })
+  it('blocks restored expired sessions before requesting protected identity', async () => {
+    const token = `header.${btoa(JSON.stringify({ session_id: 'expired' }))}.signature`
+    localStorage.setItem('awasin.session-activity', JSON.stringify({ session: `${verified.id}:expired`, at: Date.now() - 3_600_000, ended: false }))
+    mock.getSession.mockResolvedValue({ data: { session: { access_token: token, user: { id: verified.id } } }, error: null })
+    function Probe() { const auth = useAuth(); return <p>{auth.identity?.email ?? 'GUEST'}</p> }
+    const host = await render(<AuthProvider><Probe /></AuthProvider>)
+    expect(host.textContent).toBe('GUEST')
+    expect(fetchIdentity).not.toHaveBeenCalled()
+    expect(mock.signOut).toHaveBeenCalledWith({ scope: 'local' })
+  })
+  it('does not sign out a newer SDK session when an older tab expires', async () => {
+    const session = (id: string) => ({ access_token: `header.${btoa(JSON.stringify({ session_id: id }))}.signature`, user: { id: verified.id } })
+    localStorage.setItem('awasin.session-activity', JSON.stringify({ session: `${verified.id}:old`, at: Date.now() - 3_600_000, ended: false }))
+    mock.getSession.mockResolvedValueOnce({ data: { session: session('old') }, error: null }).mockResolvedValue({ data: { session: session('new') }, error: null })
+    await render(<AuthProvider><p>APP</p></AuthProvider>)
+    expect(mock.signOut).not.toHaveBeenCalled()
+  })
   it('preserves protected content during background session checks', async () => {
     mock.getSession.mockResolvedValue({ data: { session: { access_token: crypto.randomUUID() } }, error: null })
     const host = await render(<AuthProvider><MemoryRouter><Routes><Route element={<ProtectedRoute />}><Route path="/" element={<input defaultValue="unfinished form" />} /></Route></Routes></MemoryRouter></AuthProvider>)
@@ -168,5 +235,28 @@ describe('routing and session state', () => {
     expect(input.value).toBe('unfinished form')
     await act(async () => finish(verified))
     expect(host.querySelector('input')).toBe(input)
+  })
+  it('clears the previous account immediately while a different account is verified', async () => {
+    mock.getSession.mockResolvedValue({ data: { session: { access_token: crypto.randomUUID(), user: { id: verified.id } } }, error: null })
+    function Probe() { const auth = useAuth(); return <p>{auth.loading ? 'LOADING' : auth.identity?.email ?? 'GUEST'}</p> }
+    const host = await render(<AuthProvider><Probe /></AuthProvider>)
+    expect(host.textContent).toBe(verified.email)
+    let finish!: (value: typeof verified) => void
+    vi.mocked(fetchIdentity).mockImplementation(() => new Promise(resolve => { finish = resolve }))
+    await act(async () => authEvent('SIGNED_IN', { access_token: crypto.randomUUID(), user: { id: 'second-user' } }))
+    expect(host.textContent).toBe('LOADING')
+    expect(host.textContent).not.toContain(verified.email)
+    await act(async () => finish({ ...verified, id: 'second-user', email: 'second@example.invalid', profile: { id: 'second-user', display_name: 'Second' } }))
+    expect(host.textContent).toBe('second@example.invalid')
+  })
+  it('removes protected identity when backend verification rejects an expired session', async () => {
+    mock.getSession.mockResolvedValue({ data: { session: { access_token: crypto.randomUUID() } }, error: null })
+    function Probe() { const auth = useAuth(); return <p>{auth.identity?.email ?? auth.error}</p> }
+    const host = await render(<AuthProvider><Probe /></AuthProvider>)
+    expect(host.textContent).toBe(verified.email)
+    vi.mocked(fetchIdentity).mockRejectedValueOnce(new Error('Sesi tidak valid. Silakan masuk kembali.'))
+    await act(async () => authEvent('TOKEN_REFRESHED', { access_token: crypto.randomUUID() }))
+    expect(host.textContent).toContain('Sesi tidak valid')
+    expect(host.textContent).not.toContain(verified.email)
   })
 })

@@ -1,5 +1,10 @@
 # AWASIN frontend
 
+Status terbaru Dashboard, Scan, History, Settings, Edukasi dan Feedback tersedia pada
+[laporan progres Phase 1–4](../AWASIN_PROGRESS_PHASE_1_4.md). Bagian integrasi akun
+di bawah mencatat fondasi sebelumnya; migrasi fitur baru 002–004 masih perlu
+diterapkan ke Supabase dan diverifikasi pada lingkungan uji yang sesuai.
+
 ## Phase 2 — integrasi akun
 
 Form akun memakai SDK Supabase, session provider, proteksi route, profil,
@@ -9,7 +14,7 @@ diterapkan; bootstrap admin pertama berhasil. Role tetap dibaca dari database.
 Setelah persetujuan pemilik proyek, TOTP dan batas durasi sesi AAL1 di Supabase
 sudah dinonaktifkan; faktor authenticator lama dihapus. Verifikasi email saat
 aktivasi/pemulihan dan reautentikasi untuk mengganti password tetap terpisah dari login.
-Lihat [panduan Phase 2](../docs/PHASE_2_IDENTITY.md)
+Lihat [laporan progres dan aktivasi](../AWASIN_PROGRESS_PHASE_1_4.md)
 untuk setup Windows, environment, migrasi/RLS, provisioning admin, batas keamanan,
 dan status pengujian. Jalankan `npm run test` untuk test auth dengan provider mocked.
 
@@ -26,7 +31,8 @@ menginstal dependensi, mengubah Auth, atau menghentikan proses lain.
 
 Bagian berikut mendokumentasikan tahap frontend sebelumnya: pernyataan belum ada
 auth/backend dan route belum diproteksi di bawah ini sudah digantikan implementasi
-Phase 2. Fitur analisis serta pengiriman feedback tetap belum tersedia.
+Phase 2. Engine analisis belum tersedia. Pengiriman Feedback sudah diimplementasikan,
+tetapi persistensi cloud memerlukan migrasi 004 dan verifikasi integrasi.
 
 **Cek Dulu, Lebih Aman.** AWASIN merupakan platform web berbasis AI untuk membantu masyarakat memeriksa indikasi penipuan digital. Frontend memuat landing page responsif dengan form input lokal; belum ada kemampuan analisis keamanan yang berjalan.
 
@@ -38,7 +44,9 @@ Phase 2. Fitur analisis serta pengiriman feedback tetap belum tersedia.
 - Motion for React (`motion/react`) untuk animasi; Inter Variable disajikan lokal dari `@fontsource-variable/inter` (tanpa request font ke layanan eksternal).
 - ESLint 10, typescript-eslint, plugin React Hooks dan React Refresh.
 
-Tidak membutuhkan backend, database, Supabase, API key, atau akun.
+Landing page, artikel edukasi, validasi scan dan pembaca QR lokal dapat digunakan
+tanpa akun. Login, profil, preferensi, riwayat, ekspor dan pengiriman Feedback
+memerlukan layanan/konfigurasi yang sesuai; lihat laporan progres di atas.
 
 ## Menjalankan
 
@@ -146,7 +154,11 @@ Folder cadangan sengaja belum berisi implementasi atau file kosong. Git tidak me
 | Admin (nanti) | `/admin/feedback` | Moderasi feedback |
 | Semua | `*` | Halaman tidak ditemukan |
 
-Home, Feedback, dan 404 memakai halaman tersendiri; route lainnya memakai placeholder bersama. Label akses hanya mendokumentasikan rencana: **belum ada autentikasi atau proteksi route**, termasuk admin. Tidak ada status login buatan. Hosting produksi perlu mengarahkan URL SPA yang tidak cocok dengan file statis ke `index.html` agar refresh pada nested route bekerja.
+Home, Feedback, Edukasi/artikel, Dashboard, Scan, Riwayat/detail, Settings dan 404
+memakai halaman aktual. Dashboard, Riwayat, Settings dan route admin dilindungi
+oleh verifikasi identitas. Halaman admin yang belum dibangun tetap berupa placeholder.
+Hosting produksi perlu mengarahkan URL SPA yang tidak cocok dengan file statis
+ke `index.html` agar refresh pada nested route bekerja.
 
 ## Fondasi tampilan dan aksesibilitas
 

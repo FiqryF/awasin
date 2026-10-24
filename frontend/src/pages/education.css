@@ -1,0 +1,24 @@
+.education-page { padding-bottom: 48px; }
+.education-page > header { margin-bottom: 40px; max-width: 850px; }
+.education-page h1 { font-size: clamp(2.25rem,4vw,3.75rem); font-weight: 750; line-height: 1.12; letter-spacing: -.035em; text-wrap: balance; }
+.education-page > p, .education-page header > p:not(.education-topic) { color: #c8d0be; line-height: 1.8; margin-block: 20px; max-width: 68ch; }
+.education-page header .history-back { margin-top: 16px; }
+.education-index { border-top: 1px solid rgb(245 255 233 / 20%); }
+.education-index > article { display: grid; grid-template-columns: 210px minmax(0,1fr); align-items: center; gap: 32px; padding-block: 32px; border-bottom: 1px solid rgb(245 255 233 / 20%); }
+.education-index img { aspect-ratio: 4 / 3; width: 100%; object-fit: cover; border-radius: 16px; }
+.education-topic { color: #c8d0be; font-size: .8125rem; margin-bottom: 12px; }
+.education-index h2 { font-size: 1.5rem; line-height: 1.4; font-weight: 650; }
+.education-index h2 a { display: flex; gap: 20px; justify-content: space-between; align-items: center; }
+.education-index svg { flex-shrink: 0; }
+.education-index div > p:last-child { margin-top: 16px; line-height: 1.8; color: #c8d0be; max-width: 70ch; }
+.education-reading { max-width: 78ch; margin-inline: auto; }
+.education-reading-image { width: 100%; max-height: 340px; object-fit: cover; border-radius: 20px; margin-bottom: 40px; }
+.education-reading > section { margin-block: 36px; }
+.education-reading h2 { font-size: 1.5rem; line-height: 1.4; font-weight: 650; }
+.education-reading section > p { color: #c8d0be; line-height: 1.9; margin-top: 16px; }
+.education-source, .education-related { border-top: 1px solid rgb(245 255 233 / 20%); padding-top: 28px; }
+.education-source a, .education-related a { display: flex; align-items: center; gap: 14px; min-height: 44px; margin-block: 16px; text-decoration: underline; text-underline-offset: 5px; overflow-wrap: anywhere; }
+.education-source svg, .education-related svg { flex-shrink: 0; }
+.education-related { margin-block: 36px; }
+.education-page .education-disclaimer { font-size: .8125rem; }
+@media(max-width:600px) { .education-index > article { grid-template-columns: 90px minmax(0,1fr); gap: 20px; align-items: start; } .education-index h2 { font-size: 1.125rem; } .education-index div > p:last-child { font-size: .875rem; grid-column: 1 / -1; } .education-index img { aspect-ratio: 1; } .education-reading h1 { font-size: 2.25rem; } }

@@ -78,16 +78,20 @@ class IdentityService:
                 raise unauthorized()
             return self.keys[kid]
 
-    async def request(self, method: str, path: str, token: str | None = None, **kwargs) -> httpx.Response:
+    async def request(self, method: str, path: str, token: str | None = None, *, prefer: str | None = None, **kwargs) -> httpx.Response:
         if not self.settings.supabase_url or not self.settings.supabase_publishable_key:
             raise HTTPException(503)
         headers = {"apikey": self.settings.supabase_publishable_key.get_secret_value()}
         if token:
             headers["Authorization"] = f"Bearer {token}"
+        if prefer:
+            headers['Prefer'] = prefer
         try:
             response = await self.client.request(method, f"{self.settings.supabase_url}{path}", headers=headers, **kwargs)
             if response.status_code in {401, 403}:
                 raise unauthorized()
+            if response.status_code == 429:
+                raise HTTPException(429, headers={'Retry-After': '600'})
             if not response.is_success or len(response.content) > 1_000_000:
                 raise HTTPException(503)
             return response
@@ -110,9 +114,13 @@ class IdentityService:
             payload = jwt.decode(
                 token, key.key, algorithms=[self.settings.supabase_jwt_algorithm],
                 issuer=f"{self.settings.supabase_url}/auth/v1", audience="authenticated",
-                options={"require": ["sub", "iss", "aud", "exp", "iat", "role", "session_id", "aal"]},
+                options={"require": ["sub", "iss", "aud", "exp", "iat", "role", "session_id", "aal"], "verify_iat": False},
             )
             claims = Claims.model_validate(payload)
+            # Issuer and API clocks can differ slightly at password sign-in.
+            # Limit tolerance to issued-at; expiry/signature/issuer stay strict.
+            if claims.iat > time.time() + 5:
+                raise unauthorized()
             UUID(claims.sub)
             UUID(claims.session_id)
             return claims

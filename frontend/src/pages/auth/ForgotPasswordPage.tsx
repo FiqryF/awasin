@@ -10,10 +10,10 @@ function ForgotIdentity() {
   return (
     <div className="auth-identity-copy">
       <p className="auth-identity-tagline section-label">Keamanan Akun.</p>
-      <h1 className="auth-identity-headline">
+      <p className="auth-identity-headline">
         Atur ulang<br />
         <span className="auth-identity-accent">kata sandi kamu.</span>
-      </h1>
+      </p>
       <p className="auth-identity-desc">
         Masukkan alamat email yang terdaftar. Kami akan memandu kamu untuk
         membuat kata sandi baru secara aman.
@@ -50,7 +50,7 @@ export function ForgotPasswordPage() {
     <AuthLayout panelContent={<ForgotIdentity />} backTo="/login" backLabel="Kembali ke halaman masuk">
       <div className="auth-card">
         <div className="auth-card-head">
-          <h2 className="auth-card-title">Lupa Kata Sandi?</h2>
+          <h1 className="auth-card-title">Lupa Kata Sandi?</h1>
           <p className="auth-card-subtitle">
             Masukkan email untuk menerima kode pemulihan kata sandi.
           </p>

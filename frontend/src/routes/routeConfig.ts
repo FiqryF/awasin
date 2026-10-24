@@ -9,9 +9,6 @@ export const scanRoutes = [
 // Non-public routes require a server-verified identity; admin routes require the current database admin role.
 // /login, /register, /forgot-password, /reset-password, /verify-email sudah menjadi halaman nyata.
 export const placeholderRoutes = [
-  ...scanRoutes.map((route) => ({ ...route, access: 'public' as const })),
-  { path: '/education', title: 'Scam Education Center', access: 'public' },
-  { path: '/history', title: 'Scan History', access: 'user' },
   { path: '/settings', title: 'Pengaturan Akun', access: 'user' },
   { path: '/admin', title: 'Administrator', access: 'admin' },
   { path: '/admin/domains', title: 'Kelola Domain Resmi', access: 'admin' },

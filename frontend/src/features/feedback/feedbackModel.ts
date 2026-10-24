@@ -1,4 +1,5 @@
 import { isValidEmail } from '../../utils/isValidEmail'
+import { validReportId } from '../history/contracts'
 
 export const feedbackCategories = [
   { id: 'detection', title: 'Kesalahan Deteksi', description: 'Laporkan hasil pemeriksaan yang menurutmu tidak tepat.' },
@@ -45,17 +46,24 @@ export const feedbackFields: Record<FeedbackCategory, readonly FeedbackField[]> 
   other: [{ name: 'title', label: 'Judul feedback', max: 120 }, description('Deskripsi feedback')],
 }
 
+function feedbackFieldError(field: FeedbackField, value: string): string | undefined {
+  if (field.required && value.length < (field.min ?? 1)) return field.min ? `Isi sedikitnya ${field.min} karakter.` : 'Pilih salah satu opsi.'
+  if (value.length > field.max) return `Batasi hingga ${field.max.toLocaleString('id-ID')} karakter.`
+  if (value && field.options && !field.options.includes(value)) return 'Pilih opsi yang tersedia.'
+  return undefined
+}
+
 export function validateFeedback(category: FeedbackCategory, draft: FeedbackDraft): FeedbackErrors {
   const errors: FeedbackErrors = {}
   for (const field of feedbackFields[category]) {
-    const value = draft[field.name].trim()
-    if (field.required && value.length < (field.min ?? 1)) errors[field.name] = field.min ? `Isi sedikitnya ${field.min} karakter.` : 'Pilih salah satu opsi.'
-    else if (value.length > field.max) errors[field.name] = `Batasi hingga ${field.max.toLocaleString('id-ID')} karakter.`
-    else if (value && field.options && !field.options.includes(value)) errors[field.name] = 'Pilih opsi yang tersedia.'
+    const message = feedbackFieldError(field, draft[field.name].trim())
+    if (message) errors[field.name] = message
   }
   const email = draft.email.trim()
   if (email && !isValidEmail(email)) errors.email = 'Masukkan alamat email yang valid, atau kosongkan.'
   if (!draft.privacy) errors.privacy = 'Setujui pernyataan privasi untuk melanjutkan.'
+  if(category==='detection'&&draft.scanReference.trim()&&!validReportId(draft.scanReference.trim()))errors.scanReference='Gunakan ID laporan tersimpan yang valid, atau kosongkan.'
+  if(draft.file)errors.file='Pengiriman lampiran belum tersedia. Hapus lampiran sebelum melanjutkan.'
   return errors
 }
 

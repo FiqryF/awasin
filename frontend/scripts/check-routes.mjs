@@ -1,20 +1,31 @@
+import { runSequentially } from './run-sequentially.mjs'
 import assert from 'node:assert/strict'
 import { createElement } from 'react'
-import { renderToString } from 'react-dom/server'
+import { renderToPipeableStream } from 'react-dom/server'
+import { PassThrough } from 'node:stream'
 import { MemoryRouter } from 'react-router'
 import { createServer } from 'vite'
 
 const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' })
+async function renderPage(element) {
+  return new Promise((resolve,reject)=>{
+    const stream=new PassThrough();let html=''
+    stream.on('data',chunk=>{html+=chunk});stream.on('end',()=>resolve(html));stream.on('error',reject)
+    const renderer=renderToPipeableStream(element,{onAllReady(){renderer.pipe(stream)},onError:reject})
+  })
+}
 try {
   const { AppRoutes } = await server.ssrLoadModule('/src/routes/AppRoutes.tsx')
   const { placeholderRoutes } = await server.ssrLoadModule('/src/routes/routeConfig.ts')
   const { AuthContext } = await server.ssrLoadModule('/src/features/auth/context.ts')
   // Rendering fixtures only: real route authorization is tested separately.
   const fixtureIdentity = { id: 'ssr-fixture', email: 'local@example.invalid', role: 'admin', aal: 'aal2', profile: { id: 'ssr-fixture', display_name: 'SSR fixture' } }
-  const expectedPaths = ['/scan/link', '/scan/message', '/scan/website', '/scan/qr', '/scan/media', '/education', '/history', '/settings', '/admin', '/admin/domains', '/admin/articles', '/admin/feedback']
+  const expectedPaths = ['/settings', '/admin', '/admin/domains', '/admin/articles', '/admin/feedback']
   assert.deepEqual(placeholderRoutes.map(({ path }) => path), expectedPaths)
-  for (const { path, title } of [{ path: '/', title: 'Jangan asal klik.' }, { path: '/feedback', title: 'Ada yang perlu' }, ...placeholderRoutes, { path: '/tidak-ada', title: 'Halaman tidak ditemukan' }]) {
-    const html = renderToString(createElement(AuthContext.Provider, { value: { loading: false, identity: fixtureIdentity, error: '', refresh: async () => fixtureIdentity } }, createElement(MemoryRouter, { initialEntries: [path] }, createElement(AppRoutes))))
+  await runSequentially([{ path: '/', title: 'Jangan asal klik.' }, { path: '/dashboard', title: 'Selamat datang kembali' }, { path: '/feedback', title: 'Ada yang perlu' }, {path:'/education',title:'Kenali modusnya.'}, {path:'/education/phishing',title:'Cermati link, bukan hanya tampilannya.'}, {path:'/education/tidak-ada',title:'Artikel tidak ditemukan.'}, { path: '/history', title: 'Riwayat Pemeriksaanmu.' }, { path: '/history/tidak-valid', title: 'Detail Hasil Pemeriksaan' }, ...['link', 'message', 'website', 'qr', 'media'].map(mode => ({ path: `/scan/${mode}`, title: 'Periksa konten mencurigakan.' })), ...placeholderRoutes, { path: '/tidak-ada', title: 'Halaman tidak ditemukan' }], async ({ path, title }) => {
+    // The root now redirects verified accounts; render its public content as a guest.
+    const pageIdentity = path === '/' ? null : fixtureIdentity
+    const html = await renderPage(createElement(AuthContext.Provider, { value: { loading: false, identity: pageIdentity, error: '', refresh: async () => pageIdentity } }, createElement(MemoryRouter, { initialEntries: [path] }, createElement(AppRoutes))))
     assert.ok(html.includes(title), `Missing title: ${path}`)
     assert.equal((html.match(/<h1[\s>]/g) ?? []).length, 1, `Expected one h1: ${path}`)
     assert.ok(html.includes('<main') && html.includes('<footer'), `Missing layout: ${path}`)
@@ -28,8 +39,15 @@ try {
       assert.ok(html.includes('href="/education"'))
       assert.ok(html.includes('href="#periksa"'))
     }
+    if (path === '/dashboard') {
+      for (const id of ['beranda', 'periksa', 'edukasi']) assert.ok(html.includes(`id="${id}"`), `Missing dashboard section: ${id}`)
+      assert.ok(html.includes('SSR fixture'), 'Dashboard must use verified profile name')
+      assert.equal((html.match(/role="tab"/g) ?? []).length, 6)
+      assert.ok(html.includes('Memuat aktivitas pemeriksaan'), 'History must load real account records')
+      assert.ok(html.includes('Menu akun') && !html.includes('Masuk ke akun AWASIN'), 'Authenticated navbar must expose profile instead of login')
+    }
     console.log(`PASS ${path}`)
-  }
+  })
   const authRoutes = [
     { path: '/login', title: 'Selamat Datang Kembali' },
     { path: '/register', title: 'Bergabung dengan AWASIN' },
@@ -37,18 +55,22 @@ try {
     { path: '/reset-password', title: 'Buat Kata Sandi Baru' },
     { path: '/verify-email', title: 'Cek Emailmu' },
   ]
-  for (const { path, title } of authRoutes) {
-    const html = renderToString(createElement(MemoryRouter, { initialEntries: [path] }, createElement(AppRoutes)))
+  await runSequentially(authRoutes, async ({ path, title }) => {
+    const html = await renderPage(createElement(MemoryRouter, { initialEntries: [path] }, createElement(AppRoutes)))
     assert.ok(html.includes(title) && html.includes('auth-root'), `Missing auth page: ${path}`)
+    assert.equal((html.match(/<h1[\s>]/g)??[]).length,1,`Expected one accessible auth h1: ${path}`)
+    assert.ok(html.includes('<main'),`Missing auth main landmark: ${path}`)
     assert.ok(html.includes('assets/brand/logo-honeydew.png') && html.includes('assets/brand/logo-blood-red.png'), `Missing brand assets: ${path}`)
     assert.ok(!html.includes('floating-header'), `Unexpected site navbar: ${path}`)
     console.log(`PASS ${path}`)
-  }
+  })
   const { validateScanInput, validateFile } = await server.ssrLoadModule('/src/features/scan/scanConfig.ts')
   for (const mode of ['link', 'website']) {
-    for (const url of ['', 'contoh.com', 'javascript:alert(1)', 'file:///etc/passwd', 'data:text/plain,test']) assert.ok(validateScanInput(mode, url, null), `Must reject: ${url}`)
+    for (const url of ['', 'javascript:alert(1)', 'file:///etc/passwd', 'data:text/plain,test']) assert.ok(validateScanInput(mode, url, null), `Must reject: ${url}`)
     for (const url of ['https://contoh.com', ' https://contoh.com/path?q=1 ']) assert.equal(validateScanInput(mode, url, null), null)
   }
+  assert.ok(validateScanInput('link', 'contoh.com', null))
+  assert.equal(validateScanInput('website', 'contoh.com', null), null)
   const image = { type: 'image/png', size: 1024 }
   const video = { type: 'video/mp4', size: 2048 }
   assert.ok(validateScanInput('message', 'pendek', null))
@@ -76,8 +98,8 @@ try {
   }
   console.log('PASS shared email validation, whitespace, duplicate separators and length boundaries')
   const { emptyFeedback, feedbackCategories, feedbackFields, validateFeedback, readFeedbackEntry } = await server.ssrLoadModule('/src/features/feedback/feedbackModel.ts')
-  for (const { id } of feedbackCategories) {
-    const categoryHtml = renderToString(createElement(MemoryRouter, { initialEntries: [{ pathname: '/feedback', state: { feedbackCategory: id } }] }, createElement(AppRoutes)))
+  await runSequentially(feedbackCategories, async ({ id }) => {
+    const categoryHtml = await renderPage(createElement(MemoryRouter, { initialEntries: [{ pathname: '/feedback', state: { feedbackCategory: id } }] }, createElement(AppRoutes)))
     const ids = [...categoryHtml.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1])
     assert.equal(new Set(ids).size, ids.length, `Duplicate IDs in feedback category: ${id}`)
     assert.ok(categoryHtml.includes('<form'), `Missing dynamic feedback form: ${id}`)
@@ -101,7 +123,7 @@ try {
       if (field.required) assert.ok(validateFeedback(id, { ...valid, [field.name]: '' })[field.name])
       if (field.options) assert.ok(validateFeedback(id, { ...valid, [field.name]: 'opsi tidak tersedia' })[field.name])
     }
-  }
+  })
   assert.deepEqual(readFeedbackEntry(null), { category: null, scanReference: '' })
   assert.deepEqual(readFeedbackEntry({ feedbackCategory: 'invalid', scanReference: 'x' }), { category: null, scanReference: '' })
   assert.deepEqual(readFeedbackEntry({ feedbackCategory: 'detection', scanReference: ' test-reference ' }), { category: 'detection', scanReference: 'test-reference' })

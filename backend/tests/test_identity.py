@@ -64,7 +64,7 @@ def identity_api(settings):
 
 def test_protected_requests_and_current_role(identity_api):
     client, token, state, _, _ = identity_api
-    for path in ["/api/v1/auth/me", "/api/v1/admin/identity"]:
+    for path in ["/api/v1/auth/me", "/api/v1/admin/identity", "/api/v1/history"]:
         assert client.get(path).status_code == 401
     headers = {"Authorization": f"Bearer {token()}"}
     response = client.get("/api/v1/auth/me", headers=headers)
@@ -80,6 +80,9 @@ def test_protected_requests_and_current_role(identity_api):
     assert client.get("/api/v1/admin/identity", headers=aal2).status_code == 403
     state["active_session"] = False
     assert client.get("/api/v1/auth/me", headers=headers).status_code == 401
+    assert client.get("/api/v1/history", headers=headers).status_code == 401
+    assert client.get("/api/v1/account/preferences", headers=headers).status_code == 401
+    assert client.get("/api/v1/account/export", headers=headers).status_code == 401
 
 
 @pytest.mark.parametrize("changes", [
@@ -125,6 +128,14 @@ def test_unconfirmed_account_and_provider_failure(identity_api):
     response = client.get("/api/v1/auth/me", headers=headers)
     assert response.status_code == 503
     assert "test-only-public-key" not in response.text
+
+
+def test_fresh_tokens_tolerate_small_issuer_clock_skew_without_accepting_expired_tokens(identity_api):
+    client, token, _, _, _ = identity_api
+    now = int(time.time())
+    assert client.get('/api/v1/auth/me', headers={'Authorization': f'Bearer {token({"iat": now + 2})}'}).status_code == 200
+    assert client.get('/api/v1/auth/me', headers={'Authorization': f'Bearer {token({"iat": now + 60})}'}).status_code == 401
+    assert client.get('/api/v1/auth/me', headers={'Authorization': f'Bearer {token({"exp": now - 1})}'}).status_code == 401
 
 
 def test_bounded_key_cache_rotation(identity_api):

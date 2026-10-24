@@ -1,0 +1,23 @@
+.dashboard-hero { background: radial-gradient(ellipse at 75% 30%, rgb(135 0 2 / 35%), transparent 65%), #000; }
+.dashboard-hero .hero-center { max-width: 1100px; }
+.dashboard-eyebrow { margin-bottom: 28px; color: rgb(245 255 233 / 78%); }
+.dashboard-hero .hero-title { font-size: clamp(2.8rem, 6.6vw, 6.4rem); letter-spacing: -0.04em; line-height: 1.04; }
+.dashboard-hero .hero-title-second { margin-top: 8px; overflow-wrap: anywhere; }
+.dashboard-history-action { border-color: rgb(245 255 233 / 30%); color: #f5ffe9; background: rgb(0 0 0 / 45%); }
+.dashboard-history-action:hover { border-color: #f5ffe9; background: rgb(245 255 233 / 8%); }
+.dashboard-activity { background: #000; border-top: 1px solid rgb(245 255 233 / 12%); }
+.dashboard-activity-heading { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-bottom: 40px; }
+.dashboard-activity-heading h2 { font-size: clamp(2rem, 4vw, 3.25rem); line-height: 1.12; letter-spacing: -0.035em; font-weight: 750; }
+.dashboard-activity-heading p { margin-top: 16px; color: rgb(245 255 233 / 72%); line-height: 1.7; max-width: 56ch; }
+.dashboard-activity-heading > .button { flex-shrink: 0; }
+.dashboard-history-empty { display: flex; align-items: flex-start; gap: 24px; border-block: 1px solid rgb(245 255 233 / 16%); padding-block: 40px; }
+.dashboard-history-empty > svg { flex-shrink: 0; color: rgb(245 255 233 / 65%); margin-top: 4px; }
+.dashboard-history-empty h3 { font-size: 1.2rem; font-weight: 600; line-height: 1.5; }
+.dashboard-history-empty p { color: rgb(245 255 233 / 72%); max-width: 66ch; font-size: 0.9375rem; line-height: 1.8; margin-top: 12px; }
+.dashboard-history-empty .dashboard-storage-note { display: flex; align-items: center; gap: 8px; font-size: 0.8125rem; margin-top: 24px; }
+.dashboard-storage-note svg { flex-shrink: 0; }
+@media (max-width: 767px) {
+  .dashboard-activity-heading { flex-direction: column; align-items: flex-start; }
+  .dashboard-history-empty { gap: 16px; padding-block: 28px; }
+  .dashboard-history-empty > svg { width: 24px; }
+}

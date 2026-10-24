@@ -1,25 +1,26 @@
 import { useState, type SubmitEvent } from 'react'
 import { isValidEmail } from '../../utils/isValidEmail'
-import { Link, useLocation, useNavigate } from 'react-router'
+import { Link, Navigate, useLocation } from 'react-router'
 import { requireSupabase, supabase } from '../../features/auth/client'
 import { createAuthActions } from '../../features/auth/actions'
-import { fetchIdentity } from '../../features/auth/identity'
+import { useAuth } from '../../features/auth/useAuth'
 import { identityDestination, safeReturnPath } from '../../features/auth/policy'
 import { ShieldCheck } from 'lucide-react'
 import { AuthLayout } from '../../components/auth/AuthLayout'
 import { FormField } from '../../components/auth/FormField'
 import { PasswordField } from '../../components/auth/PasswordField'
 import { AuthFeedback } from '../../components/auth/AuthFeedback'
+import { getSessionNotice } from '../../features/auth/sessionActivity'
 
 // ─── Panel identitas kiri ─────────────────────────────────────────────────────
 function LoginIdentity() {
   return (
     <div className="auth-identity-copy">
       <p className="auth-identity-tagline section-label">Cek Dulu, Lebih Aman.</p>
-      <h1 className="auth-identity-headline">
+      <p className="auth-identity-headline">
         Periksa ancaman digital dengan<br />
         <span className="auth-identity-accent">lebih cerdas.</span>
-      </h1>
+      </p>
       <p className="auth-identity-desc">
         Akses riwayat pemeriksaan, simpan laporan, dan kelola akun AWASIN&nbsp;kamu
         setelah masuk.
@@ -47,12 +48,13 @@ function validate(email: string, password: string) {
 
 // ─── Halaman Login ────────────────────────────────────────────────────────────
 export function LoginPage() {
+  const [sessionNotice] = useState(getSessionNotice)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({})
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
-  const navigate = useNavigate()
+  const { identity, error: sessionError, refresh } = useAuth()
   const { state } = useLocation()
 
   async function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
@@ -65,29 +67,32 @@ export function LoginPage() {
     setLoading(true)
     setMessage('')
     try {
-      const session = await createAuthActions(requireSupabase(), window.location.origin).login(email, password)
+      await createAuthActions(requireSupabase(), window.location.origin).login(email, password)
       setPassword('')
-      const identity = await fetchIdentity(session.access_token)
-      const requested = safeReturnPath(state?.returnTo)
-      let destination = '/dashboard'
-      if (identity.role === 'admin') destination = identityDestination(identity)
-      else if (requested && !requested.startsWith('/admin')) destination = requested
-      await navigate(destination, { replace: true })
+      if (!await refresh()) setMessage('Sesi belum dapat diverifikasi. Silakan coba lagi.')
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Tidak dapat masuk. Coba lagi.') }
     finally { setLoading(false) }
+  }
+
+  if (identity) {
+    const requested = safeReturnPath(state?.returnTo)
+    let destination = identityDestination(identity)
+    if (identity.role === 'user' && requested && !requested.startsWith('/admin')) destination = requested
+    return <Navigate to={destination} replace />
   }
 
   return (
     <AuthLayout panelContent={<LoginIdentity />}>
       <div className="auth-card">
         <div className="auth-card-head">
-          <h2 className="auth-card-title">Selamat Datang Kembali</h2>
+          <h1 className="auth-card-title">Selamat Datang Kembali</h1>
           <p className="auth-card-subtitle">
             Masuk untuk mengakses riwayat pemeriksaan dan mengelola akun AWASIN.
           </p>
         </div>
 
-        {(!supabase || message) && <AuthFeedback type={message ? 'error' : 'dev'}>{message || 'Layanan akun belum dikonfigurasi pada perangkat ini.'}</AuthFeedback>}
+        {sessionNotice && <AuthFeedback type="info">{sessionNotice}</AuthFeedback>}
+        {(!supabase || message || sessionError) && <AuthFeedback type={message || sessionError ? 'error' : 'dev'}>{sessionError || message || 'Layanan akun belum dikonfigurasi pada perangkat ini.'}</AuthFeedback>}
 
         <form onSubmit={handleSubmit} noValidate className="auth-form" aria-label="Form masuk">
           <FormField

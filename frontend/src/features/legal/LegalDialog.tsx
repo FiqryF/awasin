@@ -40,14 +40,14 @@ export function LegalDialog({ kind, onClose }: Readonly<{ kind: LegalDocumentKin
       </header>
       <div className="legal-body">
         <p className="legal-summary" id="legal-summary">{content.summary}</p>
-        <p className="legal-status"><strong>Versi pengembangan.</strong> Layanan akun memerlukan konfigurasi Supabase dan persetujuan aktivasi pengelola. Analisis dan pengiriman feedback belum tersedia.</p>
+        <p className="legal-status"><strong>Versi pengembangan.</strong> Akun, riwayat, preferensi, dan Feedback bergantung pada aktivasi layanan oleh pengelola. Perhatikan konfirmasi setiap tindakan. Analisis keamanan belum tersedia.</p>
         <nav className="legal-contents" aria-label="Daftar isi dokumen"><h3>Dalam dokumen ini</h3><ol>{content.sections.map((section, index) => <li key={section.title}><a href={`#legal-section-${index}`} onClick={(event) => { event.preventDefault(); document.getElementById(`legal-section-${index}`)?.scrollIntoView({ block: 'start', behavior: 'instant' }); document.getElementById(`legal-section-${index}`)?.focus({ preventScroll: true }) }}>{section.title}</a></li>)}</ol></nav>
         {content.sections.map((section, index) => <section className="legal-section" key={section.title}>
           <h3 id={`legal-section-${index}`} tabIndex={-1}>{section.title}</h3>
           {section.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
           {section.items && <ul>{section.items.map((item) => <li key={item}>{item}</li>)}</ul>}
         </section>)}
-        {kind === 'privacy' && <p className="legal-reference">Rujukan hak subjek data: <a href="https://peraturan.bpk.go.id/Details/229798/uu-no-27-" target="_blank" rel="noreferrer">UU No. 27 Tahun 2022 tentang Pelindungan Data Pribadi (BPK, dibuka di tab baru)</a>.</p>}
+        {kind === 'privacy' && <p className="legal-reference">Rujukan hak subjek data: <a href="https://peraturan.bpk.go.id/Details/229798/uu-no-27-tahun-2022" target="_blank" rel="noopener noreferrer">UU No. 27 Tahun 2022 tentang Pelindungan Data Pribadi (BPK, dibuka di tab baru)</a>.</p>}
       </div>
       <footer className="legal-footer"><p>Membaca dokumen tidak mengubah pilihan persetujuan Anda.</p><button type="button" className="button button-red" onClick={onClose}>Tutup dokumen</button></footer>
     </dialog>, document.body,

@@ -17,10 +17,10 @@ function RegisterIdentity() {
   return (
     <div className="auth-identity-copy">
       <p className="auth-identity-tagline section-label">Bergabung Sekarang.</p>
-      <h1 className="auth-identity-headline">
+      <p className="auth-identity-headline">
         Lindungi diri dari<br />
         <span className="auth-identity-accent">penipuan digital.</span>
-      </h1>
+      </p>
       <p className="auth-identity-desc">
         Buat akun gratis untuk menyimpan riwayat pemeriksaan dan mendapatkan
         laporan yang lebih lengkap.
@@ -87,7 +87,7 @@ export function RegisterPage() {
     <AuthLayout panelContent={<RegisterIdentity />}>
       <div className="auth-card">
         <div className="auth-card-head">
-          <h2 className="auth-card-title">Bergabung dengan AWASIN</h2>
+          <h1 className="auth-card-title">Bergabung dengan AWASIN</h1>
           <p className="auth-card-subtitle">
             Buat akun untuk menyimpan riwayat pemeriksaan sesuai pilihanmu.
           </p>

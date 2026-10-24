@@ -1,17 +1,16 @@
 import { useRef } from 'react'
 import type { ReactNode, SubmitEvent } from 'react'
 import { ArrowRight } from 'lucide-react'
-import { FileUpload } from '../scan/FileUpload'
 import { feedbackFields } from './feedbackModel'
 import type { FeedbackCategory, FeedbackDraft, FeedbackErrors } from './feedbackModel'
 
 type Props = Readonly<{
   category: FeedbackCategory; draft: FeedbackDraft; errors: FeedbackErrors;
-  onChange: (patch: Partial<FeedbackDraft>) => void; onFileChange: (file: File | null) => void;
+  onChange: (patch: Partial<FeedbackDraft>) => void; authenticated: boolean;
   onNext: () => void;
 }>
 
-export function FeedbackDetails({ category, draft, errors, onChange, onFileChange, onNext }: Props) {
+export function FeedbackDetails({ category, draft, errors, onChange, authenticated, onNext }: Props) {
   const form = useRef<HTMLFormElement>(null)
   function submit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -22,7 +21,7 @@ export function FeedbackDetails({ category, draft, errors, onChange, onFileChang
   return <form ref={form} noValidate onSubmit={submit} className="feedback-fields">
     <p className="feedback-field-hint">Kolom bertanda * wajib diisi.</p>
     <fieldset className="feedback-group"><legend>Isi laporan</legend>
-    {feedbackFields[category].map((field) => {
+    {feedbackFields[category].filter(field=>authenticated||field.name!=='scanReference').map((field) => {
       const id = `feedback-${field.name}`
       const shared = { id, name: field.name, value: draft[field.name], required: field.required, 'aria-invalid': Boolean(errors[field.name]), 'aria-describedby': [field.min ? `${id}-help` : '', errors[field.name] ? `${id}-error` : ''].filter(Boolean).join(' ') || undefined, onChange: (event: { target: { value: string } }) => onChange({ [field.name]: event.target.value }) }
       let control: ReactNode
@@ -50,13 +49,11 @@ export function FeedbackDetails({ category, draft, errors, onChange, onFileChang
       {errors.email && <p className="feedback-error" id="feedback-email-error" role="alert">{errors.email}</p>}
     </div>
     <div className="feedback-attachment">
-      <FileUpload label="Lampiran screenshot (opsional)" video={false} file={draft.file} error={errors.file ?? null} onChange={onFileChange} />
-      {errors.file && <><p id="scan-error" className="feedback-error" role="alert">{errors.file}</p><button className="feedback-back" type="button" onClick={() => onFileChange(null)}>Lanjut tanpa lampiran</button></>}
-      <p className="feedback-field-hint">Pratinjau lokal saja. File belum diunggah ke server.</p>
+      <p className="feedback-field-hint">Lampiran screenshot belum didukung. Kirim uraian teks yang sudah disamarkan tanpa file atau data sensitif.</p>
     </div>
     </fieldset>
     <div className="feedback-privacy-group">
-      <label className="feedback-consent"><input id="feedback-privacy" name="privacy" type="checkbox" required checked={draft.privacy} aria-invalid={Boolean(errors.privacy)} aria-describedby={errors.privacy ? 'feedback-privacy-error' : undefined} onChange={(event) => onChange({ privacy: event.target.checked })} /><span>Saya sudah menghapus password, OTP, dan data sensitif dari teks serta lampiran. Saya memahami data akan digunakan untuk meninjau masukan saat pengiriman tersedia.</span></label>
+      <label className="feedback-consent"><input id="feedback-privacy" name="privacy" type="checkbox" required checked={draft.privacy} aria-invalid={Boolean(errors.privacy)} aria-describedby={errors.privacy ? 'feedback-privacy-error' : undefined} onChange={(event) => onChange({ privacy: event.target.checked })} /><span>Saya sudah menghapus password, OTP, dan data sensitif. Saya setuju teks masukan, kontak opsional, dan referensi yang saya pilih disimpan untuk peninjauan. {authenticated?'Masukan ini dihubungkan dengan akun saya.':'Saya mengirim sebagai tamu.'} Feedback terpisah dari riwayat; menghapus riwayat tidak menghapus masukan yang telah diterima.</span></label>
       {errors.privacy && <p id="feedback-privacy-error" className="feedback-error" role="alert">{errors.privacy}</p>}
     </div>
     <div className="feedback-actions feedback-next"><button type="submit" className="button button-red">Tinjau masukan<ArrowRight size={18} aria-hidden="true" /></button></div>

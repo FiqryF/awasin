@@ -27,7 +27,7 @@ def test_health_and_documentation(settings):
             assert client.get(path).status_code == 200
         schema = client.get("/openapi.json").json()
         assert schema["info"]["version"] == expected["version"]
-        assert set(schema["paths"]) == {"/health", "/api/v1/health", "/api/v1/auth/me", "/api/v1/profiles/me", "/api/v1/admin/identity"}
+        assert set(schema["paths"]) == {"/health", "/api/v1/health", "/api/v1/auth/me", "/api/v1/profiles/me", "/api/v1/admin/identity", "/api/v1/history", "/api/v1/history/{report_id}", "/api/v1/account/preferences", "/api/v1/account/export", "/api/v1/feedback"}
 
 
 def test_startup_without_supabase(settings, monkeypatch):
@@ -61,7 +61,7 @@ def test_cors(settings):
         ).headers
         for headers in [
             {"Origin": "https://untrusted.example", "Access-Control-Request-Method": "GET"},
-            {"Origin": settings.cors_origins[0], "Access-Control-Request-Method": "POST"},
+            {"Origin": settings.cors_origins[0], "Access-Control-Request-Method": "PUT"},
         ]:
             assert client.options("/health", headers=headers).status_code == 400
 

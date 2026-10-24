@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { passwordError } from './policy'
 import { isValidEmail } from '../../utils/isValidEmail'
 import { clearPasswordSetup } from './passwordSetup'
+import { clearSessionNotice, setSessionNotice } from './sessionActivity'
 
 export const accountNotice = 'Jika alamat memenuhi syarat, tautan akan dikirim. Periksa kotak masuk atau spam.'
 export const loginFailure = 'Tidak dapat masuk. Periksa email, kata sandi, dan verifikasi akun Anda.'
@@ -27,6 +28,7 @@ export function createAuthActions(client: SupabaseClient, origin: string) {
       const { data, error } = await client.auth.signInWithPassword({ email: email.trim(), password })
       if (error && (error.status === 0 || error.name === 'AuthRetryableFetchError')) throw new Error('Layanan login tidak dapat dihubungi. Periksa koneksi lalu coba lagi; tidak perlu mereset kata sandi.')
       if (error || !data.session || !data.user.email_confirmed_at) throw new Error(loginFailure)
+      clearSessionNotice()
       return data.session
     },
     async forgot(email: string) {
@@ -38,7 +40,12 @@ export function createAuthActions(client: SupabaseClient, origin: string) {
     },
     async logout() {
       const { error } = await client.auth.signOut({ scope: 'local' })
-      if (error) throw new Error('Keluar belum berhasil. Coba lagi sebelum meninggalkan perangkat ini.')
+      if (error) {
+        // Current SDK can remove the local session even when remote revocation fails.
+        const remaining = await client.auth.getSession()
+        if (remaining.error || remaining.data.session) throw new Error('Keluar belum berhasil. Coba lagi sebelum meninggalkan perangkat ini.')
+        setSessionNotice('local-only')
+      }
       clearPasswordSetup()
     },
     async updatePassword(password: string, confirm: string, nonce?: string) {

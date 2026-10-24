@@ -4,7 +4,7 @@
 .feedback-atmosphere::after { content: ""; position: absolute; inset: -10% -25% -10% 35%; background: radial-gradient(ellipse at 65% 35%, rgb(135 0 2 / 30%), transparent 56%), radial-gradient(ellipse at 80% 75%, rgb(245 255 233 / 6%), transparent 45%); animation: feedback-drift 18s ease-in-out infinite alternate-reverse; }
 .feedback-ribbon { position: absolute; top: 12%; right: -28%; width: 70%; height: 60%; background: radial-gradient(ellipse, rgb(135 0 2 / 18%) 0%, rgb(135 0 2 / 10%) 28%, rgb(245 255 233 / 3%) 46%, transparent 72%); animation: feedback-ribbon-drift 30s ease-in-out infinite alternate; }
 .feedback-ribbon:nth-child(2) { top: 45%; right: -38%; width: 85%; height: 46%; animation-duration: 32s; animation-direction: alternate-reverse; }
-.feedback-topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 12px; margin-bottom: 36px; }
+.feedback-topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 12px; margin-bottom: 36px; background: rgb(0 0 0 / 88%); backdrop-filter: blur(12px); }
 .feedback-topbar > span { color: rgb(245 255 233 / 75%); font-size: 0.75rem; white-space: nowrap; }
 .feedback-layout { display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); gap: clamp(48px, 7vw, 112px); align-items: start; }
 .feedback-editorial { position: sticky; top: 104px; }
@@ -118,3 +118,4 @@
   .feedback-categories button:hover > svg { transform: none; }
   .feedback-categories button:hover, .feedback-categories button[aria-pressed="true"] { transform: none; }
 }
+.feedback-received p { line-height: 1.8; color: #c8d0be; margin-block: 20px; overflow-wrap: anywhere; }

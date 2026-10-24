@@ -31,6 +31,11 @@ function validateUrl(text: string): string | null {
   } catch { return 'Masukkan alamat lengkap dengan https:// atau http://, misalnya https://contoh.com.' }
 }
 
+export function normalizeWebsiteInput(text:string):string|null {
+  const value=text.trim()
+  try {const url=new URL(value.includes(':')?value:`https://${value}`);return ['http:','https:'].includes(url.protocol)&&url.hostname.includes('.')&&!url.username&&!url.password?url.href:null} catch{return null}
+}
+
 function validateMessage(text: string, hasFile: boolean): string | null {
   if (!hasFile && text.trim().length < 10) return 'Masukkan sedikitnya 10 karakter pesan, atau pilih screenshot.'
   if (text.length > 10000) return 'Pesan terlalu panjang. Batasi hingga 10.000 karakter.'
@@ -42,7 +47,8 @@ export function validateScanInput(mode: ScanType, text: string, file: Pick<File,
     const error = validateFile(file, mode)
     if (error) return error
   }
-  if (mode === 'link' || mode === 'website') return validateUrl(text)
+  if (mode === 'website') return normalizeWebsiteInput(text)?null:'Masukkan domain atau URL HTTP(S) yang valid, misalnya contoh.com atau https://contoh.com.'
+  if (mode === 'link') return validateUrl(text)
   if (mode === 'message') return validateMessage(text, Boolean(file))
   if (!file) return mode === 'video' ? 'Pilih video yang ingin diperiksa terlebih dahulu.' : 'Pilih gambar yang ingin diperiksa terlebih dahulu.'
   return null

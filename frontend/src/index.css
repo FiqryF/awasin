@@ -83,14 +83,14 @@
   .nav-brand .wordmark { font-size: 1.5rem; font-weight: 750; line-height: 1; }
   .nav-brand .brand-mark { width: 34px; height: 34px; }
   .nav-actions { display: flex; align-items: center; gap: 12px; }
-  .desktop-nav { display: flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; font-size: 0.8125rem; font-weight: 500; }
+  .desktop-nav { position: relative; isolation: isolate; display: flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; font-size: 0.8125rem; font-weight: 500; }
   .desktop-nav a { position: relative; isolation: isolate; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding-inline: 14px; border-radius: 999px; transition: background 180ms; }
-  .desktop-nav a:hover { background: rgb(135 0 2 / 8%); }
-  [data-theme="dark"] .desktop-nav a:hover { background: rgb(245 255 233 / 12%); }
-  .nav-active-pill { position: absolute; inset: 2px 0; z-index: -1; border-radius: inherit; background: rgb(135 0 2 / 10%); box-shadow: inset 0 1px 1px rgb(245 255 233 / 35%); pointer-events: none; }
+  .desktop-nav a:not([aria-current]):hover { background: rgb(135 0 2 / 8%); }
+  [data-theme="dark"] .desktop-nav a:not([aria-current]):hover { background: rgb(245 255 233 / 12%); }
+  .nav-active-pill { position: absolute; top: 0; left: 0; z-index: -1; border-radius: 999px; background: rgb(135 0 2 / 10%); box-shadow: inset 0 1px 1px rgb(245 255 233 / 35%); pointer-events: none; }
   [data-theme="dark"] .nav-active-pill { background: rgb(245 255 233 / 16%); }
-  .mobile-nav a[aria-current], .desktop-nav a[aria-current="page"] { background: rgb(135 0 2 / 10%); }
-  [data-theme="dark"] .mobile-nav a[aria-current], [data-theme="dark"] .desktop-nav a[aria-current="page"] { background: rgb(245 255 233 / 16%); }
+  .mobile-nav a[aria-current] { background: rgb(135 0 2 / 10%); }
+  [data-theme="dark"] .mobile-nav a[aria-current] { background: rgb(245 255 233 / 16%); }
   .nav-login, .menu-trigger { align-items: center; justify-content: center; width: 52px; height: 52px; flex-shrink: 0; border-radius: 50%; color: inherit; }
   .nav-login { display: inline-flex; }
   .nav-login:hover, .menu-trigger:hover { border-color: currentColor; }
@@ -422,3 +422,16 @@
   .hero-video { display: none; }
   .article-card:hover, .button:hover, .action-link:hover, .button:hover svg, .nav-cta:hover svg, .article-action:hover svg { transform: none; }
 }
+.footer-legal-link { text-align: left; color: inherit; min-height: 44px; align-self: flex-start; font-size: inherit; }
+.route-loading { min-height: 50dvh; padding-block: 40px; color: #c8d0be; }
+.route-error { max-width: 70ch; margin-inline: auto; padding: 64px 24px; min-height: 50dvh; }
+.route-error h1 { font-size: 2rem; line-height: 1.3; font-weight: 700; }
+.route-error p { color: #c8d0be; line-height: 1.8; margin-block: 20px 28px; }
+.route-error > .auth-link { display: inline-flex; min-height: 44px; align-items: center; margin-left: 20px; }
+
+/* Native status outputs retain the block layout of the messages they replace. */
+@layer base { output { display: block; } }
+
+/* Account motion preferences apply before the lazy Settings page is loaded. */
+html:root[data-account-motion="reduced"] { scroll-behavior: auto; }
+html:root[data-account-motion="reduced"] body *, html:root[data-account-motion="reduced"] body *::before, html:root[data-account-motion="reduced"] body *::after { animation-duration: .01ms; animation-iteration-count: 1; transition-duration: .01ms; scroll-behavior: auto; }
