@@ -1,20 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { LogOut, Settings, UserRound } from 'lucide-react'
-import { Link, useNavigate } from 'react-router'
+import { Link } from 'react-router'
 import { useAuth } from '../../features/auth/useAuth'
-import { createAuthActions } from '../../features/auth/actions'
-import { requireSupabase } from '../../features/auth/client'
+import { useLogout } from '../../features/auth/useLogout'
 import './profile-menu.css'
 
 export function ProfileMenu({ onOpen }: Readonly<{ onOpen?: () => void }>) {
-  const { identity, refresh } = useAuth()
+  const { identity } = useAuth()
+  const confirmLogout = useLogout()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const container = useRef<HTMLDivElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const firstAction = useRef<HTMLAnchorElement>(null)
-  const navigate = useNavigate()
   useEffect(() => {
     if (!open) return
     const frame = requestAnimationFrame(() => firstAction.current?.focus())
@@ -31,9 +30,7 @@ export function ProfileMenu({ onOpen }: Readonly<{ onOpen?: () => void }>) {
     if (busy) return
     setBusy(true); setError('')
     try {
-      await createAuthActions(requireSupabase(), window.location.origin).logout()
-      await refresh()
-      await navigate('/', { replace: true })
+      await confirmLogout()
     } catch {
       setError('Belum berhasil keluar. Periksa koneksi lalu coba lagi.')
     } finally { setBusy(false) }

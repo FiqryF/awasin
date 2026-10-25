@@ -22,11 +22,12 @@ const ScanHistoryPage = lazy(() => import('../pages/ScanHistoryPage').then(modul
 const AnalysisDetailPage = lazy(() => import('../pages/AnalysisDetailPage').then(module => ({default:module.AnalysisDetailPage})))
 import { ScanWorkspacePage } from '../pages/ScanWorkspacePage'
 import '../features/history/history.css'
+import { SessionLoading } from '../features/auth/SessionLoading'
 
 export function AppRoutes() {
   const {pathname}=useLocation()
   return (
-    <RouteBoundary resetKey={pathname}><Suspense fallback={<main className="page-width placeholder-main"><output>Memuat halaman…</output></main>}><Routes>
+    <RouteBoundary resetKey={pathname}><Suspense fallback={<SessionLoading label="Memuat halaman…" />}><Routes>
       {/* Auth routes — full-screen tanpa navbar/footer */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />

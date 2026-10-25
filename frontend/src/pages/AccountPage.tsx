@@ -1,5 +1,4 @@
 import { useEffect, useState, type SubmitEvent } from 'react'
-import { useNavigate } from 'react-router'
 import { AuthFeedback } from '../components/auth/AuthFeedback'
 import { PasswordField } from '../components/auth/PasswordField'
 import { FormField } from '../components/auth/FormField'
@@ -8,6 +7,7 @@ import { createAuthActions, PasswordAlreadySetError } from '../features/auth/act
 import { fetchIdentity } from '../features/auth/identity'
 import { useAuth } from '../features/auth/useAuth'
 import { API_BASE_URL } from '../services/api'
+import { useLogout } from '../features/auth/useLogout'
 
 export function AccountPage({ admin = false, settings = false }: Readonly<{ admin?: boolean; settings?: boolean }>) {
   const { identity, refresh } = useAuth()
@@ -18,7 +18,7 @@ export function AccountPage({ admin = false, settings = false }: Readonly<{ admi
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [nonce, setNonce] = useState('')
-  const navigate = useNavigate()
+  const logout = useLogout()
   let heading = 'Dashboard Pengguna'
   if (admin) heading = 'Dashboard Administrator'
   else if (settings) heading = 'Pengaturan Akun'
@@ -70,10 +70,8 @@ export function AccountPage({ admin = false, settings = false }: Readonly<{ admi
       }
       setPassword(''); setConfirm(''); setNonce('')
       setMessage('Kata sandi berhasil disimpan.')
-      try { await actions.logout() }
+      try { await logout() }
       catch { setMessage('Kata sandi berhasil disimpan. Sesi perangkat belum ditutup; klik Keluar dari perangkat ini untuk mencobanya lagi.'); return }
-      void refresh().catch(() => undefined)
-      await navigate('/login', { replace: true })
     })
   }
   async function requestReauthentication() {
@@ -82,11 +80,6 @@ export function AccountPage({ admin = false, settings = false }: Readonly<{ admi
       throw new Error('Kode belum dapat dikirim.')
     }
     setMessage('Jika memenuhi syarat, kode reautentikasi dikirim ke email.')
-  }
-  async function logout() {
-    await createAuthActions(requireSupabase(), window.location.origin).logout()
-    await refresh()
-    await navigate('/', { replace: true })
   }
   return <section className="max-w-xl"><h1 className="text-3xl font-bold">{heading}</h1>
     {message && <AuthFeedback type="info">{message}</AuthFeedback>}

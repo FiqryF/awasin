@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState, type SubmitEvent } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { Download, LogOut, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../features/auth/useAuth'
 import type { Identity } from '../features/auth/identity'
 import { usePreferences } from '../features/settings/context'
 import { accountRequest, type Preferences } from '../features/settings/api'
 import { changeAccountPassword } from '../features/settings/changePassword'
-import { createAuthActions } from '../features/auth/actions'
-import { requireSupabase } from '../features/auth/client'
+import { useLogout } from '../features/auth/useLogout'
 import { FormField } from '../components/auth/FormField'
 import { PasswordField } from '../components/auth/PasswordField'
 import { DeleteHistoryDialog } from '../features/history/DeleteHistoryDialog'
@@ -57,7 +56,7 @@ function ProfileSettings({identity}:Readonly<{identity:Identity}>) {
 }
 
 function SecuritySettings({identity}:Readonly<{identity:Identity}>) {
-  const {refresh}=useAuth(),navigate=useNavigate()
+  const confirmLogout = useLogout()
   const [current,setCurrent]=useState(''),[password,setPassword]=useState(''),[confirm,setConfirm]=useState('')
   const [busy,setBusy]=useState(false),[changed,setChanged]=useState(false),[error,setError]=useState('')
   const active=useRef(true)
@@ -71,7 +70,7 @@ function SecuritySettings({identity}:Readonly<{identity:Identity}>) {
   async function logout(){
     if(busy)return
     setBusy(true);setError('')
-    try{await createAuthActions(requireSupabase(),location.origin).logout();if(active.current){await refresh();void navigate('/',{replace:true})}}
+    try{await confirmLogout()}
     catch(error){if(active.current){setError(errorMessage(error));setBusy(false)}}
   }
   return <><div className="settings-intro"><h2>Jaga akses tetap milikmu.</h2><p>Kata sandi saat ini diverifikasi kembali oleh penyedia sebelum kata sandi baru disimpan. Isinya tidak disimpan dalam profil AWASIN.</p></div><form className="settings-form" noValidate onSubmit={change}><PasswordField id="settings-current-password" label="Kata sandi saat ini" value={current} onChange={setCurrent}/><PasswordField id="settings-new-password" label="Kata sandi baru" value={password} onChange={setPassword} autoComplete="new-password" hint="Gunakan 8–128 karakter dan hindari kata sandi yang digunakan di layanan lain."/><PasswordField id="settings-confirm-password" label="Konfirmasi kata sandi baru" value={confirm} onChange={setConfirm} autoComplete="new-password"/>{error&&<p role="alert" className="settings-feedback">{error}</p>}{changed&&<output className="settings-feedback">Kata sandi berhasil diubah. Untuk menutup sesi perangkat ini, gunakan tombol Keluar di bawah.</output>}<button type="submit" className="button button-red" disabled={busy}>{busy?'Memproses…':'Simpan kata sandi baru'}</button></form><div className="settings-data-row"><div><h3>Sesi perangkat ini</h3><p>Akses akun telah diverifikasi. Daftar perangkat dan lokasi login tidak dikumpulkan oleh halaman ini.</p><Link className="auth-link" to="/forgot-password">Lupa kata sandi?</Link></div><button className="button history-secondary" type="button" disabled={busy} onClick={()=>void logout()}><LogOut size={18} aria-hidden="true"/>Keluar</button></div></>

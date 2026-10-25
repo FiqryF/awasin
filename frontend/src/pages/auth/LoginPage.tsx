@@ -11,6 +11,7 @@ import { FormField } from '../../components/auth/FormField'
 import { PasswordField } from '../../components/auth/PasswordField'
 import { AuthFeedback } from '../../components/auth/AuthFeedback'
 import { getSessionNotice } from '../../features/auth/sessionActivity'
+import { useAuthNotifications } from '../../features/auth/authNotifications'
 
 // ─── Panel identitas kiri ─────────────────────────────────────────────────────
 function LoginIdentity() {
@@ -55,6 +56,7 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const { identity, error: sessionError, refresh } = useAuth()
+  const { notify } = useAuthNotifications()
   const { state } = useLocation()
 
   async function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
@@ -69,7 +71,9 @@ export function LoginPage() {
     try {
       await createAuthActions(requireSupabase(), window.location.origin).login(email, password)
       setPassword('')
-      if (!await refresh()) setMessage('Sesi belum dapat diverifikasi. Silakan coba lagi.')
+      const confirmed = await refresh()
+      if (!confirmed) setMessage('Sesi belum dapat diverifikasi. Silakan coba lagi.')
+      else notify({ title: 'Berhasil masuk', message: 'Sesi akun Anda sudah diverifikasi. Anda sekarang masuk ke AWASIN.', tone: 'success' })
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Tidak dapat masuk. Coba lagi.') }
     finally { setLoading(false) }
   }

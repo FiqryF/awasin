@@ -13,7 +13,7 @@ import type { ReportDetail } from '../src/features/history/contracts'
 
 const mock=vi.hoisted(()=>({request:vi.fn(),read:vi.fn(),save:vi.fn(),update:vi.fn(),refresh:vi.fn(),signIn:vi.fn(),updateUser:vi.fn(),signOut:vi.fn()}))
 vi.mock('../src/features/settings/api',async original=>({...await original<object>(),accountRequest:mock.request,getPreferences:mock.read,savePreferences:mock.save}))
-vi.mock('../src/features/auth/client',()=>({reauthenticationClient:()=>({auth:{signInWithPassword:mock.signIn,updateUser:mock.updateUser,signOut:mock.signOut}}),requireSupabase:()=>({auth:{signOut:mock.signOut}})}))
+vi.mock('../src/features/auth/client',()=>({reauthenticationClient:()=>({auth:{signInWithPassword:mock.signIn,updateUser:mock.updateUser,signOut:mock.signOut}}),requireSupabase:()=>({auth:{signOut:mock.signOut,getSession:async()=>({data:{session:null},error:null})}})}))
 const identity={id:'fixture-owner',email:'fixture@example.invalid',role:'user' as const,aal:'aal1' as const,profile:{id:'fixture-owner',display_name:'Nama Fixture'}}
 let cleanup:(()=>void)|undefined
 beforeEach(()=>{

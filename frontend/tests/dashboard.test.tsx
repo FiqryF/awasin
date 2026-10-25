@@ -10,9 +10,10 @@ import { MainLayout } from '../src/layouts/MainLayout'
 import { FloatingNavbar } from '../src/components/layout/FloatingNavbar'
 import { ProfileMenu } from '../src/components/layout/ProfileMenu'
 import { HomePage } from '../src/pages/HomePage'
+import { AuthNotificationProvider } from '../src/features/auth/AuthNotificationProvider'
 
 const mock = vi.hoisted(() => ({ logout: vi.fn() }))
-vi.mock('../src/features/auth/client', () => ({ requireSupabase: () => ({}) }))
+vi.mock('../src/features/auth/client', () => ({ requireSupabase: () => ({ auth: { getSession: async () => ({ data: { session: null }, error: null }) } }) }))
 vi.mock('../src/features/history/api', () => ({ listHistory: vi.fn(async () => ({ items: [], next_cursor: null })) }))
 vi.mock('../src/features/auth/actions', () => ({ createAuthActions: () => ({ logout: mock.logout }) }))
 const identity = { id: 'fixture-user', email: 'fixture@example.invalid', role: 'user' as const, aal: 'aal1' as const, profile: { id: 'fixture-user', display_name: 'Pengguna Uji' } }
@@ -35,7 +36,7 @@ async function render(children: ReactNode, auth: AuthState = state, path = '/das
   document.body.append(host)
   const root = createRoot(host)
   cleanup = () => { root.unmount(); host.remove() }
-  await act(async () => root.render(<AuthContext.Provider value={auth}><MemoryRouter initialEntries={[path]}>{children}</MemoryRouter></AuthContext.Provider>))
+  await act(async () => root.render(<AuthContext.Provider value={auth}><MemoryRouter initialEntries={[path]}><AuthNotificationProvider>{children}</AuthNotificationProvider></MemoryRouter></AuthContext.Provider>))
   return host
 }
 const click = async (element: Element) => { await act(async () => { element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 })) }) }
@@ -123,7 +124,7 @@ describe('account disclosure and real logout integration', () => {
     await click(host.querySelector('#profile-actions button')!)
     expect(mock.logout).toHaveBeenCalledTimes(1)
     expect(refresh).toHaveBeenCalledTimes(1)
-    expect(host.textContent).toBe('PUBLIC')
+    expect(host.textContent).toContain('PUBLIC')
   })
   it('reports failed sign-out and keeps account actions available', async () => {
     mock.logout.mockRejectedValueOnce(new Error('Unavailable'))

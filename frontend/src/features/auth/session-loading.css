@@ -1,0 +1,8 @@
+.session-loading { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; min-height: 100dvh; padding: 24px; color: #f5ffe9; background: #050303; }
+.session-loading-content { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.session-loading-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 36px; font-size: 1.5rem; font-weight: 750; }
+.session-loading-spinner { color: #f5ffe9; margin-bottom: 20px; animation: session-loading-spin .85s linear infinite; }
+.session-loading output { font-size: 1rem; font-weight: 600; line-height: 1.6; }
+.session-loading p { margin-top: 6px; color: #c8d0be; font-size: .875rem; line-height: 1.7; }
+@keyframes session-loading-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .session-loading-spinner { animation: none; } }

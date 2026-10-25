@@ -5,6 +5,57 @@ Status terbaru Dashboard, Scan, History, Settings, Edukasi dan Feedback tersedia
 di bawah mencatat fondasi sebelumnya; migrasi fitur baru 002–004 masih perlu
 diterapkan ke Supabase dan diverifikasi pada lingkungan uji yang sesuai.
 
+## Notifikasi autentikasi — 25 Oktober 2026
+
+Login dari formulir baru menampilkan `Berhasil masuk` sesudah SDK menerima kredensial
+dan `AuthProvider.refresh()` mengembalikan identitas yang diverifikasi backend.
+Restore sesi, refresh halaman, dan refresh token tidak mengulang notifikasi login.
+
+Logout manual dari menu akun, Settings, dan halaman akun/admin memakai `useLogout`.
+Setelah signOut, helper memastikan sesi SDK kosong dan state akun sudah bersih.
+Jika sesi masih aktif, hanya pesan kegagalan yang ditampilkan. Jika SDK membersihkan
+sesi browser tetapi pencabutan remote gagal, notifikasi memberi peringatan yang
+membedakan kedua hasil tersebut.
+
+Provider notifikasi berada di luar subtree preferensi yang berganti saat identitas
+berubah. Provider juga menyelesaikan navigasi ke `/` dan scroll ke atas. Guard halaman
+terlindungi menunggu commit navigasi tersebut supaya event SIGNED_OUT tidak menyisipkan
+redirect ke `/login`. Kebijakan idle dan alur reset password tetap terpisah.
+
+Popup berada di tengah layar desktop/mobile, berbentuk kartu status dengan ikon
+konfirmasi yang digambar, hierarki teks terpusat, dan latar diredupkan. Lifetime
+popup sukses mengikuti penyelesaian animasi Motion: masuk 280 ms, indikator waktu
+2,6 detik, dan keluar 180 ms (sekitar 3,06 detik total), bukan timer penutup terpisah.
+Indikator dijeda saat hover/fokus atau tab tersembunyi dan dapat ditutup manual
+dengan animasi keluar. Reduced motion memakai fade singkat dengan waktu baca yang
+tetap cukup; pengaturan CSS reduced motion tidak mempercepat indikator menjadi nol.
+Peringatan/kegagalan menunggu pengguna menutupnya. Pesan diumumkan melalui live region
+yang tetap terpasang, tanpa mengambil fokus. Tampilan mengikuti glass AWASIN dan
+menyesuaikan desktop/mobile serta reduced motion. Tidak ada dependency tambahan.
+
+Tes `auth-notifications.test.tsx` mencakup verifikasi login tertunda/gagal, restore
+sesi, logout yang memicu unmount lebih dulu, sesi yang masih aktif, kegagalan jaringan,
+retry, peringatan pencabutan remote, dan dismissal/fokus popup. Verifikasi memakai SDK
+mock; tampilan browser diperiksa dengan fixture sementara tanpa kredensial pengguna.
+
+Saat aplikasi memulihkan sesi, `AuthSessionGate` menampilkan `SessionLoading` layar
+penuh sebelum navbar, footer dan halaman dipasang. Ini menggantikan banner status
+dengan ruang konten kosong. Indikator juga dipakai untuk fallback halaman lazy dan
+verifikasi route terlindungi. Teks status mengikuti proses yang sedang berjalan;
+tidak ada persentase atau waktu tunggu minimum buatan. Error yang sudah selesai
+diverifikasi tidak disembunyikan di balik loader. Pemeriksaan background atas akun
+yang sudah terverifikasi tetap mempertahankan konten yang sedang digunakan.
+
+Verifikasi pembaruan: 188 tes, lint, build dan check:routes lulus. Fixture browser
+mengonfirmasi pusat popup sama dengan pusat viewport pada desktop dan mobile,
+serta tampilan loading tanpa navbar/footer. Fixture sementara sudah dihapus.
+
+Penyempurnaan animasi diuji dengan kontrol completion terpisah untuk fase masuk,
+countdown, dan keluar. Tes memverifikasi pause fokus/visibility serta callback lama
+yang tidak boleh menutup pesan baru. Browser desktop/mobile memverifikasi desain
+dan siklus otomatis sampai elemen dilepas sesudah animasi; fixture sudah dihapus.
+Verifikasi akhir penyempurnaan: 191 tes, lint, build dan check:routes lulus.
+
 ## Phase 2 — integrasi akun
 
 Form akun memakai SDK Supabase, session provider, proteksi route, profil,
