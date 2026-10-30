@@ -2,6 +2,15 @@ import { requireSupabase } from '../auth/client'
 import { API_BASE_URL } from '../../services/api'
 
 export type Preferences = { history_retention: 'manual' | 'disabled'; animation: 'system' | 'reduced' }
+function responseError(path: string, status: number) {
+  if (path.startsWith('/admin/')) {
+    if (status === 409) return 'Data sudah ada atau berubah sejak dibuka. Muat ulang sebelum menyimpan lagi.'
+    if (status === 422) return 'Periksa format, panjang isian, bukti, dan transisi status. Perubahan belum tersimpan.'
+  }
+  if (status === 401) return 'Sesi berakhir. Silakan masuk kembali.'
+  if (status === 413) return 'Ekspor melebihi batas 500 laporan atau 500 masukan. Ekspor tidak dibuat; hubungi pengelola untuk ekspor berukuran besar.'
+  return 'Perubahan belum dapat diproses. Layanan mungkin sedang tidak tersedia.'
+}
 export async function accountRequest(path: string, method = 'GET', payload?: unknown, signal?: AbortSignal, owner?: string): Promise<unknown> {
   const { data, error } = await requireSupabase().auth.getSession()
   if (error || !data.session) throw new Error('Sesi berakhir. Silakan masuk kembali.')
@@ -13,11 +22,7 @@ export async function accountRequest(path: string, method = 'GET', payload?: unk
       headers: { Authorization: `Bearer ${data.session.access_token}`, ...(payload ? { 'Content-Type': 'application/json' } : {}) },
       ...(payload ? { body: JSON.stringify(payload) } : {}) })
   } catch { throw new Error('Layanan akun tidak dapat dihubungi. Periksa koneksi dan coba lagi.') }
-  if (!response.ok) {
-    if (response.status === 401) throw new Error('Sesi berakhir. Silakan masuk kembali.')
-    if (response.status === 413) throw new Error('Ekspor melebihi batas 500 laporan atau 500 masukan. Ekspor tidak dibuat; hubungi pengelola untuk ekspor berukuran besar.')
-    throw new Error('Perubahan belum dapat diproses. Layanan mungkin sedang tidak tersedia.')
-  }
+  if (!response.ok) throw new Error(responseError(path, response.status))
   return response.json()
 }
 export function parsePreferences(value: unknown): Preferences {

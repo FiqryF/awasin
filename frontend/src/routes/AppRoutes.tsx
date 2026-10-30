@@ -13,11 +13,16 @@ const ForgotPasswordPage = lazy(() => import('../pages/auth/ForgotPasswordPage')
 const ResetPasswordPage = lazy(() => import('../pages/auth/ResetPasswordPage').then(module => ({default:module.ResetPasswordPage})))
 const VerifyEmailPage = lazy(() => import('../pages/auth/VerifyEmailPage').then(module => ({default:module.VerifyEmailPage})))
 import { ProtectedRoute } from '../features/auth/ProtectedRoute'
-const AccountPage = lazy(() => import('../pages/AccountPage').then(module => ({default:module.AccountPage})))
 const SettingsPage = lazy(() => import('../pages/SettingsPage').then(module => ({default:module.SettingsPage})))
 const EducationPage = lazy(() => import('../pages/EducationPage').then(module => ({default:module.EducationPage})))
 const EducationArticlePage = lazy(() => import('../pages/EducationPage').then(module => ({default:module.EducationArticlePage})))
 const DashboardPage = lazy(() => import('../pages/DashboardPage').then(module => ({default:module.DashboardPage})))
+const AdminLayout = lazy(() => import('../features/admin/AdminLayout').then(module => ({default:module.AdminLayout})))
+const AdminOverview = lazy(() => import('../features/admin/OverviewPage').then(module => ({default:module.OverviewPage})))
+const AdminFeedback = lazy(() => import('../features/admin/FeedbackPage').then(module => ({default:module.AdminFeedbackPage})))
+const AdminDomains = lazy(() => import('../features/admin/DomainsPage').then(module => ({default:module.DomainsPage})))
+const AdminArticles = lazy(() => import('../features/admin/ArticlesPage').then(module => ({default:module.ArticlesPage})))
+const AdminAudit = lazy(() => import('../features/admin/AuditPage').then(module => ({default:module.AuditPage})))
 const ScanHistoryPage = lazy(() => import('../pages/ScanHistoryPage').then(module => ({default:module.ScanHistoryPage})))
 const AnalysisDetailPage = lazy(() => import('../pages/AnalysisDetailPage').then(module => ({default:module.AnalysisDetailPage})))
 import { ScanWorkspacePage } from '../pages/ScanWorkspacePage'
@@ -35,6 +40,15 @@ export function AppRoutes() {
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/auth/mfa" element={<Navigate to="/settings" replace />} />
+      <Route element={<ProtectedRoute admin />}><Route path="/admin" element={<AdminLayout />}>
+        <Route index element={<Navigate to="/admin/dashboard" replace />} />
+        <Route path="dashboard" element={<AdminOverview />} />
+        <Route path="feedback" element={<AdminFeedback />} />
+        <Route path="domains" element={<AdminDomains />} />
+        <Route path="articles" element={<AdminArticles />} />
+        <Route path="audit" element={<AdminAudit />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Route></Route>
 
       {/* Routes utama — dengan FloatingNavbar dan Footer */}
       <Route element={<MainLayout />}>
@@ -49,9 +63,8 @@ export function AppRoutes() {
         <Route path="/scan/media" element={<ScanWorkspacePage mode="image"/>}/>
         <Route element={<ProtectedRoute/>}><Route path="/history" element={<ScanHistoryPage/>}/><Route path="/history/:id" element={<AnalysisDetailPage/>}/></Route>
         <Route element={<ProtectedRoute />}><Route path="/dashboard" element={<DashboardPage />} /></Route>
-        <Route element={<ProtectedRoute admin />}><Route path="/admin/dashboard" element={<AccountPage admin />} /></Route>
         {placeholderRoutes.map(({ path, title, access }) => (
-          <Route key={path} element={<ProtectedRoute admin={access === 'admin'} />}><Route path={path} element={path === '/settings' ? <SettingsPage /> : <PlaceholderPage title={title} access={access} />} /></Route>
+          <Route key={path} element={<ProtectedRoute />}><Route path={path} element={path === '/settings' ? <SettingsPage /> : <PlaceholderPage title={title} access={access} />} /></Route>
         ))}
         <Route path="*" element={<NotFoundPage />} />
       </Route>

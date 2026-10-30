@@ -40,6 +40,8 @@ it('shows actual identity, read-only email and all four functional categories',a
  const host=await render()
  expect(host.querySelector<HTMLInputElement>('#settings-name')?.value).toBe(identity.profile.display_name)
  expect(host.querySelector<HTMLInputElement>('#settings-email')?.readOnly).toBe(true)
+ expect(host.textContent).not.toContain('Email telah diverifikasi')
+ expect(host.textContent).toContain('Kepemilikan alamat email tidak diverifikasi')
  for(const [label,heading] of [['Keamanan Akun','Jaga akses tetap milikmu.'],['Privasi & Data','Datamu, pilihanmu.'],['Preferensi','Nyaman digunakan, sesuai kebutuhanmu.'],['Profil Saya','Identitas yang kamu gunakan.']]){
   await click(button(host,label));expect(host.querySelector('h2')?.textContent).toBe(heading)
  }

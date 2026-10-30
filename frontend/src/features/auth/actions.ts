@@ -4,8 +4,7 @@ import { isValidEmail } from '../../utils/isValidEmail'
 import { clearPasswordSetup } from './passwordSetup'
 import { clearSessionNotice, setSessionNotice } from './sessionActivity'
 
-export const accountNotice = 'Jika alamat memenuhi syarat, tautan akan dikirim. Periksa kotak masuk atau spam.'
-export const loginFailure = 'Tidak dapat masuk. Periksa email, kata sandi, dan verifikasi akun Anda.'
+export const loginFailure = 'Tidak dapat masuk. Periksa email dan kata sandi Anda.'
 export class PasswordAlreadySetError extends Error {}
 
 export function createAuthActions(client: SupabaseClient, origin: string) {
@@ -15,14 +14,13 @@ export function createAuthActions(client: SupabaseClient, origin: string) {
       if (!isValidEmail(email.trim()) || passwordError(password) || password !== confirm || !name.trim() || name.trim().length > 100) {
         throw new Error('Periksa data pendaftaran dan konfirmasi kata sandi.')
       }
-      const { data, error } = await client.auth.signUp({ email: email.trim(), password, options: { data: { display_name: name.trim() }, emailRedirectTo: callback('/verify-email') } })
-      if (error && !['user_already_exists', 'email_exists'].includes(error.code ?? '')) throw new Error('Pendaftaran belum dapat diproses. Coba lagi nanti.')
-      // Confirmation must be enabled by the project owner; never silently bypass it.
-      if (data.session) {
-        await client.auth.signOut({ scope: 'local' })
-        throw new Error('Konfigurasi konfirmasi email perlu diperiksa pengelola.')
+      const { data, error } = await client.auth.signUp({ email: email.trim(), password, options: { data: { display_name: name.trim() } } })
+      // A provider session is necessary; protected access still requires backend identity validation.
+      if (error || !data.session?.access_token || !data.user?.id || data.user.is_anonymous || data.session.user?.id !== data.user.id) {
+        throw new Error('Pendaftaran belum dapat diselesaikan. Coba masuk dengan akun Anda atau coba lagi nanti.')
       }
-      return accountNotice
+      clearSessionNotice()
+      return data.session
     },
     async login(email: string, password: string) {
       const { data, error } = await client.auth.signInWithPassword({ email: email.trim(), password })

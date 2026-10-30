@@ -27,7 +27,13 @@ def test_health_and_documentation(settings):
             assert client.get(path).status_code == 200
         schema = client.get("/openapi.json").json()
         assert schema["info"]["version"] == expected["version"]
-        assert set(schema["paths"]) == {"/health", "/api/v1/health", "/api/v1/auth/me", "/api/v1/profiles/me", "/api/v1/admin/identity", "/api/v1/history", "/api/v1/history/{report_id}", "/api/v1/account/preferences", "/api/v1/account/export", "/api/v1/feedback"}
+        assert set(schema["paths"]) == {"/health", "/api/v1/health", "/api/v1/auth/me", "/api/v1/profiles/me", "/api/v1/admin/identity", "/api/v1/history", "/api/v1/history/{report_id}", "/api/v1/account/preferences", "/api/v1/account/export", "/api/v1/feedback"} | {
+            '/api/v1/admin/overview','/api/v1/admin/feedback','/api/v1/admin/feedback/{record_id}',
+            '/api/v1/admin/organizations','/api/v1/admin/organizations/{record_id}',
+            '/api/v1/admin/domains','/api/v1/admin/domains/{record_id}','/api/v1/admin/domains/{record_id}/review',
+            '/api/v1/admin/articles','/api/v1/admin/articles/{record_id}','/api/v1/admin/articles/{record_id}/status',
+            '/api/v1/admin/audit','/api/v1/education','/api/v1/education/{slug}',
+        }
 
 
 def test_startup_without_supabase(settings, monkeypatch):

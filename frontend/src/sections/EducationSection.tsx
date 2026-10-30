@@ -4,9 +4,9 @@ import { Link } from 'react-router'
 import { ScrollReveal } from '../components/motion/ScrollReveal'
 import { BackgroundVideo } from '../components/motion/BackgroundVideo'
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion'
-import { articles } from '../features/education/articles'
+import { useEducation, type Article } from '../features/education/useEducation'
 
-function EducationArticle({ article }: Readonly<{ article: typeof articles[number] }>) {
+function EducationArticle({ article }: Readonly<{ article: Article }>) {
   return (
     <article className="article-card">
       <div className="article-image"><img src={article.image} alt="" loading="lazy" decoding="async" width={640} height={480} /></div>
@@ -21,6 +21,8 @@ function EducationArticle({ article }: Readonly<{ article: typeof articles[numbe
 }
 
 export function EducationSection({ personalized = false }: Readonly<{ personalized?: boolean }>) {
+  const resource = useEducation()
+  const articles = resource.items.slice(0,4)
   const track = useRef<HTMLElement>(null)
   const reducedMotion = usePrefersReducedMotion()
   const [controls, setControls] = useState({ previous: false, next: true })
@@ -65,7 +67,7 @@ export function EducationSection({ personalized = false }: Readonly<{ personaliz
         <section ref={track} id="education-carousel" className="education-carousel" aria-label="Topik edukasi, geser untuk melihat artikel lainnya" onScroll={updateControls}>{articles.map((article, index) => (
           <ScrollReveal key={article.title} className="article-reveal" delay={(index + 1) * 0.08}><EducationArticle article={article} /></ScrollReveal>
         ))}</section>
-        <p className="education-note"><Link className="auth-link" to="/education">Jelajahi semua topik edukasi</Link></p>
+        {resource.loading&&<output>Memuat topik edukasi…</output>}{resource.error&&<div><p role="alert">{resource.error}</p><button type="button" className="button" onClick={resource.reload}>Coba lagi</button></div>}<p className="education-note"><Link className="auth-link" to="/education">Jelajahi semua topik edukasi</Link></p>
       </div>
     </section>
   )

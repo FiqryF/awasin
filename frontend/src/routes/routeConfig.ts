@@ -10,8 +10,4 @@ export const scanRoutes = [
 // /login, /register, /forgot-password, /reset-password, /verify-email sudah menjadi halaman nyata.
 export const placeholderRoutes = [
   { path: '/settings', title: 'Pengaturan Akun', access: 'user' },
-  { path: '/admin', title: 'Administrator', access: 'admin' },
-  { path: '/admin/domains', title: 'Kelola Domain Resmi', access: 'admin' },
-  { path: '/admin/articles', title: 'Kelola Artikel Edukasi', access: 'admin' },
-  { path: '/admin/feedback', title: 'Moderasi Feedback', access: 'admin' },
 ] as const

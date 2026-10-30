@@ -6,6 +6,8 @@ import { PassThrough } from 'node:stream'
 import { MemoryRouter } from 'react-router'
 import { createServer } from 'vite'
 
+// SSR structure fixtures use original content; live CMS is verified separately.
+process.env.VITE_EDUCATION_SOURCE = 'local'
 const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' })
 async function renderPage(element) {
   return new Promise((resolve,reject)=>{
@@ -20,8 +22,16 @@ try {
   const { AuthContext } = await server.ssrLoadModule('/src/features/auth/context.ts')
   // Rendering fixtures only: real route authorization is tested separately.
   const fixtureIdentity = { id: 'ssr-fixture', email: 'local@example.invalid', role: 'admin', aal: 'aal2', profile: { id: 'ssr-fixture', display_name: 'SSR fixture' } }
-  const expectedPaths = ['/settings', '/admin', '/admin/domains', '/admin/articles', '/admin/feedback']
+  const expectedPaths = ['/settings']
   assert.deepEqual(placeholderRoutes.map(({ path }) => path), expectedPaths)
+  const adminPaths = [{path:'/admin/dashboard',title:'Kendali yang terukur.'},{path:'/admin/feedback',title:'Dengarkan. Tinjau. Tindak lanjuti.'},{path:'/admin/domains',title:'Referensi, dengan bukti.'},{path:'/admin/articles',title:'Pengetahuan yang bisa dipercaya.'},{path:'/admin/audit',title:'Setiap perubahan, tercatat.'}]
+  await runSequentially(adminPaths,async ({path,title})=>{
+    const html=await renderPage(createElement(AuthContext.Provider,{value:{loading:false,identity:fixtureIdentity,error:'',refresh:async()=>fixtureIdentity}},createElement(MemoryRouter,{initialEntries:[path]},createElement(AppRoutes))))
+    assert.ok(html.includes(title)&&html.includes('admin-shell'),`Missing admin workspace: ${path}`)
+    assert.equal((html.match(/<h1[\s>]/g)??[]).length,1)
+    assert.ok(!html.includes('floating-header')&&!html.includes('<video'),'Admin must use its own layout')
+    console.log(`PASS ${path}`)
+  })
   await runSequentially([{ path: '/', title: 'Jangan asal klik.' }, { path: '/dashboard', title: 'Selamat datang kembali' }, { path: '/feedback', title: 'Ada yang perlu' }, {path:'/education',title:'Kenali modusnya.'}, {path:'/education/phishing',title:'Cermati link, bukan hanya tampilannya.'}, {path:'/education/tidak-ada',title:'Artikel tidak ditemukan.'}, { path: '/history', title: 'Riwayat Pemeriksaanmu.' }, { path: '/history/tidak-valid', title: 'Detail Hasil Pemeriksaan' }, ...['link', 'message', 'website', 'qr', 'media'].map(mode => ({ path: `/scan/${mode}`, title: 'Periksa konten mencurigakan.' })), ...placeholderRoutes, { path: '/tidak-ada', title: 'Halaman tidak ditemukan' }], async ({ path, title }) => {
     // The root now redirects verified accounts; render its public content as a guest.
     const pageIdentity = path === '/' ? null : fixtureIdentity
@@ -53,7 +63,6 @@ try {
     { path: '/register', title: 'Bergabung dengan AWASIN' },
     { path: '/forgot-password', title: 'Lupa Kata Sandi?' },
     { path: '/reset-password', title: 'Buat Kata Sandi Baru' },
-    { path: '/verify-email', title: 'Cek Emailmu' },
   ]
   await runSequentially(authRoutes, async ({ path, title }) => {
     const html = await renderPage(createElement(MemoryRouter, { initialEntries: [path] }, createElement(AppRoutes)))

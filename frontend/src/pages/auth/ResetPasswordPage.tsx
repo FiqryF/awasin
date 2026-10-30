@@ -62,7 +62,7 @@ export function ResetPasswordPage() {
     setLoading(true); setFailed(false)
     try {
       await verifyRecoveryCode(email, code)
-      setReady(true); setCode(''); setMessage('Email terverifikasi. Silakan buat kata sandi baru.')
+      setReady(true); setCode(''); setMessage('Kode pemulihan terverifikasi. Silakan buat kata sandi baru.')
     } catch (error) { setFailed(true); setMessage(error instanceof Error ? error.message : 'Verifikasi kode gagal.') }
     finally { setLoading(false) }
   }

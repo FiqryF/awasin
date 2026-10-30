@@ -3,7 +3,8 @@ import { isValidEmail } from '../../utils/isValidEmail'
 import { Link, useNavigate } from 'react-router'
 import { requireSupabase, supabase } from '../../features/auth/client'
 import { createAuthActions } from '../../features/auth/actions'
-import { passwordError } from '../../features/auth/policy'
+import { useAuth } from '../../features/auth/useAuth'
+import { identityDestination, passwordError } from '../../features/auth/policy'
 import { ShieldCheck } from 'lucide-react'
 import { AuthLayout } from '../../components/auth/AuthLayout'
 import { FormField } from '../../components/auth/FormField'
@@ -65,6 +66,7 @@ export function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const navigate = useNavigate()
+  const { refresh } = useAuth()
 
   async function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -76,9 +78,11 @@ export function RegisterPage() {
     setLoading(true)
     setMessage('')
     try {
-      const notice = await createAuthActions(requireSupabase(), window.location.origin).register(email, password, confirm, fullName)
+      const session = await createAuthActions(requireSupabase(), window.location.origin).register(email, password, confirm, fullName)
       setPassword(''); setConfirm('')
-      await navigate('/verify-email', { state: { notice } })
+      const identity = await refresh()
+      if (identity?.id !== session.user.id) throw new Error('Sesi belum dapat diverifikasi. Silakan coba masuk kembali.')
+      await navigate(identityDestination(identity), { replace: true })
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Pendaftaran belum dapat diproses.') }
     finally { setLoading(false) }
   }

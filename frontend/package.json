@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "check:routes": "node scripts/check-routes.mjs",
     "check:history-db": "node scripts/check-history-db.mjs",
+    "check:admin-db": "node scripts/check-admin-db.mjs",
     "test": "vitest run",
     "preview": "vite preview"
   },

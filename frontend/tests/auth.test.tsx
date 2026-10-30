@@ -3,7 +3,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { createAuthActions, accountNotice, loginFailure } from '../src/features/auth/actions'
+import { createAuthActions, loginFailure } from '../src/features/auth/actions'
 import { identityDestination, passwordError, safeReturnPath } from '../src/features/auth/policy'
 import { ProtectedRoute } from '../src/features/auth/ProtectedRoute'
 import { AuthContext } from '../src/features/auth/context'
@@ -11,9 +11,11 @@ import { AuthProvider } from '../src/features/auth/AuthProvider'
 import { fetchIdentity } from '../src/features/auth/identity'
 import { useAuth } from '../src/features/auth/useAuth'
 import { LoginPage } from '../src/pages/auth/LoginPage'
+import { RegisterPage } from '../src/pages/auth/RegisterPage'
+import { VerifyEmailPage } from '../src/pages/auth/VerifyEmailPage'
 
 const mock = vi.hoisted(() => ({
-  getSession: vi.fn(), onAuthStateChange: vi.fn(), exchangeCodeForSession: vi.fn(), signOut: vi.fn(),
+  getSession: vi.fn(), onAuthStateChange: vi.fn(), exchangeCodeForSession: vi.fn(), signOut: vi.fn(), signUp: vi.fn(),
 }))
 vi.mock('../src/features/auth/client', () => ({
   supabase: { auth: mock }, requireSupabase: () => ({ auth: mock }),
@@ -49,9 +51,10 @@ async function render(element: React.ReactNode) {
 }
 
 function fakeClient() {
+  const user = { id: verified.id, email_confirmed_at: '2026-10-29', is_anonymous: false }
   const auth = {
     getSession: vi.fn().mockResolvedValue({ data: { session: {} }, error: null }),
-    signUp: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
+    signUp: vi.fn().mockResolvedValue({ data: { user, session: { access_token: 'signup-fixture', user } }, error: null }),
     signInWithPassword: vi.fn().mockResolvedValue({ data: { session: { access_token: crypto.randomUUID() }, user: { email_confirmed_at: '2026-01-01' } }, error: null }),
     resetPasswordForEmail: vi.fn().mockResolvedValue({ error: null }),
     updateUser: vi.fn().mockResolvedValue({ error: null }), signOut: vi.fn().mockResolvedValue({ error: null }),
@@ -60,10 +63,11 @@ function fakeClient() {
 }
 
 describe('account actions using mocked Supabase SDK', () => {
-  it('registers with a fixed confirmation redirect and no role metadata', async () => {
+  it('accepts immediate signup without email confirmation redirects or role metadata', async () => {
     const { actions, auth } = fakeClient()
-    expect(await actions.register('person@example.invalid', 'long passphrase test', 'long passphrase test', 'Person')).toBe(accountNotice)
-    expect(auth.signUp.mock.calls[0][0].options).toEqual({ data: { display_name: 'Person' }, emailRedirectTo: 'https://awasin.example/verify-email' })
+    expect((await actions.register('person@example.invalid', 'long passphrase test', 'long passphrase test', 'Person')).user.id).toBe(verified.id)
+    expect(auth.signUp.mock.calls[0][0].options).toEqual({ data: { display_name: 'Person' } })
+    expect(auth.signOut).not.toHaveBeenCalled()
   })
   it.each([
     ['invalid', 'long passphrase test', 'long passphrase test'],
@@ -74,16 +78,19 @@ describe('account actions using mocked Supabase SDK', () => {
     await expect(actions.register(email, password, confirm, 'Person')).rejects.toThrow()
     expect(auth.signUp).not.toHaveBeenCalled()
   })
-  it('does not distinguish duplicate registration from confirmation-needed', async () => {
+  it.each([null, { code: 'user_already_exists' }, { code: 'email_exists' }, { code: 'unexpected_failure' }])('does not claim signup succeeded without a session (%j)', async error => {
     const { actions, auth } = fakeClient()
-    auth.signUp.mockResolvedValue({ data: { session: null }, error: { code: 'user_already_exists' } } as never)
-    expect(await actions.register('person@example.invalid', 'long passphrase test', 'long passphrase test', 'Person')).toBe(accountNotice)
+    auth.signUp.mockResolvedValue({ data: { session: null }, error } as never)
+    await expect(actions.register('person@example.invalid', 'long passphrase test', 'long passphrase test', 'Person')).rejects.toThrow('Pendaftaran belum dapat diselesaikan.')
   })
-  it('rejects configuration that skips email confirmation', async () => {
+  it.each([
+    { session: {} },
+    { user: { id: verified.id }, session: { access_token: 'fixture', user: { id: 'other-user' } } },
+    { user: { id: verified.id, is_anonymous: true }, session: { access_token: 'fixture', user: { id: verified.id } } },
+  ])('rejects malformed or mismatched signup identity', async data => {
     const { actions, auth } = fakeClient()
-    auth.signUp.mockResolvedValue({ data: { session: {} }, error: null } as never)
-    await expect(actions.register('person@example.invalid', 'long passphrase test', 'long passphrase test', 'Person')).rejects.toThrow('konfirmasi')
-    expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' })
+    auth.signUp.mockResolvedValue({ data, error: null } as never)
+    await expect(actions.register('person@example.invalid', 'long passphrase test', 'long passphrase test', 'Person')).rejects.toThrow('Pendaftaran belum dapat diselesaikan.')
   })
   it('establishes login through provider and maps failures to a generic response', async () => {
     const { actions, auth } = fakeClient()
@@ -129,6 +136,32 @@ describe('account actions using mocked Supabase SDK', () => {
 })
 
 describe('routing and session state', () => {
+  it('redirects the retired verification page to login without a confirmation gate', async () => {
+    const host = await render(<MemoryRouter initialEntries={['/verify-email']}><Routes><Route path="/verify-email" element={<VerifyEmailPage />} /><Route path="/login" element={<p>LOGIN</p>} /></Routes></MemoryRouter>)
+    expect(host.textContent).toBe('LOGIN')
+  })
+  it.each([verified, null])('only enters the account area after backend signup identity verification (%j)', async identity => {
+    const user = { id: verified.id, is_anonymous: false }
+    mock.signUp.mockResolvedValue({ data: { user, session: { access_token: 'signup-fixture', user } }, error: null })
+    const refresh = vi.fn().mockResolvedValue(identity)
+    const host = await render(<AuthContext.Provider value={{ identity: null, loading: false, error: '', refresh }}><MemoryRouter initialEntries={['/register']}><Routes><Route path="/register" element={<RegisterPage />} /><Route path="/dashboard" element={<p>ACCOUNT HOME</p>} /><Route path="/verify-email" element={<p>OBSOLETE GATE</p>} /></Routes></MemoryRouter></AuthContext.Provider>)
+    for (const [id, value] of [['reg-fullname', 'Person'], ['reg-email', 'person@example.invalid'], ['reg-password', 'long passphrase test'], ['reg-confirm', 'long passphrase test']]) {
+      await act(async () => {
+        const input = host.querySelector<HTMLInputElement>(`#${id}`)!
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    }
+    await act(async () => host.querySelector<HTMLInputElement>('#reg-agree')!.click())
+    await act(async () => host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+    expect(refresh).toHaveBeenCalledTimes(1)
+    if (identity) expect(host.textContent).toBe('ACCOUNT HOME')
+    else {
+      expect(host.textContent).toContain('Sesi belum dapat diverifikasi')
+      expect(host.textContent).not.toContain('ACCOUNT HOME')
+    }
+    expect(host.textContent).not.toContain('OBSOLETE GATE')
+  })
   it('routes an already verified login page through the shared identity', async () => {
     const host = await render(<AuthContext.Provider value={{ identity: verified, loading: false, error: '', refresh: async () => verified }}><MemoryRouter initialEntries={['/login']}><Routes><Route path="/login" element={<LoginPage />} /><Route path="/dashboard" element={<p>ACCOUNT HOME</p>} /></Routes></MemoryRouter></AuthContext.Provider>)
     expect(host.textContent).toBe('ACCOUNT HOME')
