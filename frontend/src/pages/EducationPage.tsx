@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowUpRight } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, ArrowDown, BookOpen, ShieldCheck } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { useEducation } from '../features/education/useEducation'
 import { useAuth } from '../features/auth/useAuth'
@@ -8,7 +8,24 @@ export function EducationPage() {
   const {identity}=useAuth()
   const resource=useEducation()
   const articles=resource.items
-  return <section className="education-page" aria-labelledby="education-center-title"><header><h1 id="education-center-title">Kenali modusnya.<br/>Ambil langkah yang tepat.</h1><p>Panduan singkat untuk membantu kamu berhenti sejenak, memeriksa konteks, dan menjaga informasi pribadi.</p><Link className="history-back" to={identity?'/dashboard#edukasi':'/#edukasi'}><ArrowLeft size={18} aria-hidden="true"/>Kembali ke beranda</Link></header><EducationState resource={resource}/><div className="education-index">{articles.map(article=><article key={article.slug}><img src={article.image} alt="" width={640} height={480} loading="lazy" decoding="async"/><div><p className="education-topic">{article.category}</p><h2><Link to={`/education/${article.slug}`}>{article.title}<ArrowUpRight size={20} aria-hidden="true"/></Link></h2><p>{article.description}</p></div></article>)}</div><p className="education-disclaimer">Materi ini adalah panduan umum, bukan hasil pemeriksaan kontenmu. Sumber rujukan tersedia pada setiap artikel.</p></section>
+  return <section className="education-page education-center" aria-labelledby="education-center-title">
+    <div className="education-ambient" aria-hidden="true"/>
+    <header className="education-hero">
+      <div className="education-hero-copy">
+        <p className="education-eyebrow"><BookOpen size={16} aria-hidden="true"/>RUANG EDUKASI AWASIN</p>
+        <h1 id="education-center-title">Kenali modusnya.<br/><span>Lebih tenang melangkah.</span></h1>
+        <p>Panduan singkat untuk membantu kamu berhenti sejenak, memeriksa konteks, dan menjaga informasi pribadi.</p>
+        <div className="education-hero-actions"><a className="button button-red" href="#education-topics">Jelajahi topik<ArrowDown size={17} aria-hidden="true"/></a><Link className="history-back" to={identity?'/dashboard#edukasi':'/#edukasi'}><ArrowLeft size={17} aria-hidden="true"/>Kembali ke beranda</Link></div>
+      </div>
+    </header>
+    <div className="education-topics-heading" id="education-topics"><div><p className="education-eyebrow">BACA. KENALI. WASPADAI.</p><h2>Bekal untuk dunia digital.</h2></div><p>Mulai dari topik yang dekat dengan keseharianmu.</p></div>
+    <EducationState resource={resource}/>
+    <div className="education-index">{articles.map((article,index)=><article key={article.slug}>
+      <div className="education-card-image"><img src={article.image} alt="" width={640} height={480} loading="lazy" decoding="async"/><span className="education-card-number" aria-hidden="true">{String(index+1).padStart(2,'0')}</span><span className="education-topic">{article.category}</span></div>
+      <div className="education-card-body"><p className="education-card-kicker"><BookOpen size={14} aria-hidden="true"/>PANDUAN PRAKTIS</p><h2><Link to={`/education/${article.slug}`}>{article.title}</Link></h2><p className="education-card-description">{article.description}</p><div className="education-card-footer" aria-hidden="true"><span>Baca panduan</span><span className="education-card-arrow"><ArrowUpRight size={20}/></span></div></div>
+    </article>)}</div>
+    <p className="education-disclaimer"><ShieldCheck size={18} aria-hidden="true"/><span>Materi ini adalah panduan umum, bukan hasil pemeriksaan kontenmu. Sumber rujukan tersedia pada setiap artikel.</span></p>
+  </section>
 }
 
 export function EducationArticlePage() {

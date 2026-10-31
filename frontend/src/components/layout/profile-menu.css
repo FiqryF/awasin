@@ -9,3 +9,5 @@
 [data-theme="dark"] .profile-dropdown > a:hover, [data-theme="dark"] .profile-dropdown > button:hover { background: rgb(245 255 233 / 10%); }
 .profile-dropdown button:disabled { opacity: 0.6; cursor: wait; }
 .profile-error { padding: 10px 12px; font-size: 0.8125rem; line-height: 1.6; }
+.profile-menu-avatar { display: grid; place-items: center; width: 26px; height: 26px; overflow: hidden; border-radius: 50%; }
+.profile-menu-avatar img { width: 100%; height: 100%; object-fit: cover; }

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { MemoryRouter } from 'react-router'
+import { createMemoryRouter, RouterProvider } from 'react-router'
 import { AuthContext } from '../src/features/auth/context'
 import { PreferencesContext } from '../src/features/settings/context'
 import { PreferencesProvider } from '../src/features/settings/PreferencesProvider'
@@ -19,6 +19,8 @@ let cleanup:(()=>void)|undefined
 beforeEach(()=>{
  Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true})
  vi.clearAllMocks()
+ HTMLDialogElement.prototype.showModal=function(){this.open=true}
+ HTMLDialogElement.prototype.close=function(){this.open=false}
  vi.stubGlobal('matchMedia',vi.fn(()=>({matches:false,addEventListener:vi.fn(),removeEventListener:vi.fn(),addListener:vi.fn(),removeListener:vi.fn()})))
  mock.signIn.mockResolvedValue({data:{user:{id:identity.id},session:{}},error:null})
  mock.updateUser.mockResolvedValue({error:null});mock.signOut.mockResolvedValue({error:null})
@@ -29,7 +31,7 @@ beforeEach(()=>{
 afterEach(async()=>{if(cleanup)await act(async()=>cleanup?.());cleanup=undefined;vi.unstubAllGlobals();delete document.documentElement.dataset.accountMotion})
 async function render(path='/settings',content=<SettingsPage/>) {
  const host=document.createElement('div');document.body.append(host);const root=createRoot(host)
- await act(async()=>root.render(<AuthContext.Provider value={{identity,loading:false,error:'',refresh:mock.refresh}}><PreferencesContext.Provider value={{value:{history_retention:'manual',animation:'system'},error:'',update:mock.update,reload:vi.fn()}}><MemoryRouter initialEntries={[path]}>{content}</MemoryRouter></PreferencesContext.Provider></AuthContext.Provider>))
+ await act(async()=>root.render(<AuthContext.Provider value={{identity,loading:false,error:'',refresh:mock.refresh}}><PreferencesContext.Provider value={{value:{history_retention:'manual',animation:'system'},error:'',update:mock.update,reload:vi.fn()}}><RouterProvider router={createMemoryRouter([{path:"*",element:content}],{initialEntries:[path]})}/></PreferencesContext.Provider></AuthContext.Provider>))
  cleanup=()=>{root.unmount();host.remove()};return host
 }
 async function click(element:Element){await act(async()=>{element.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,button:0}))})}
@@ -94,9 +96,11 @@ it('clears password fields only after a confirmed provider update',async()=>{
  await input(host.querySelector('#settings-confirm-password')!,'fixture-new-password')
  mock.updateUser.mockResolvedValueOnce({error:{code:'weak_password'}})
  await act(async()=>{host.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))})
+ await click(button(document,'Ya, ganti kata sandi'))
  expect(host.querySelector<HTMLInputElement>('#settings-new-password')?.value).toBe('fixture-new-password')
  expect(host.querySelector('output')).toBeNull()
  await act(async()=>{host.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))})
+ await click(button(document,'Ya, ganti kata sandi'))
  expect(host.querySelector<HTMLInputElement>('#settings-current-password')?.value).toBe('')
  expect(host.querySelector<HTMLInputElement>('#settings-new-password')?.value).toBe('')
  expect(host.querySelector('output')?.textContent).toContain('berhasil diubah')
@@ -113,4 +117,26 @@ it('does not offer manual report saving when retention is disabled',async()=>{
  const host=await render('/settings',<PreferencesContext.Provider value={{value:{history_retention:'disabled',animation:'system'},error:'',update:mock.update,reload:vi.fn()}}><SaveReportAction report={report} onSaved={vi.fn()}/></PreferencesContext.Provider>)
  expect(host.textContent).toContain('Penyimpanan laporan baru dinonaktifkan')
  expect(host.querySelector('input[type="checkbox"]')).toBeNull()
+})
+
+it('keeps profile changes when leaving is cancelled and discards only after confirmation',async()=>{
+ const host=await render();await input(host.querySelector('#settings-name')!,'Belum disimpan')
+ await click(button(host,'Keamanan Akun'))
+ expect(document.querySelector('dialog')?.textContent).toContain('Perubahan belum disimpan')
+ await click(button(document,'Batal'))
+ expect(host.querySelector<HTMLInputElement>('#settings-name')?.value).toBe('Belum disimpan')
+ await click(button(host,'Keamanan Akun'));await click(button(document,'Ya, tinggalkan'))
+ expect(host.querySelector('h2')?.textContent).toBe('Jaga akses tetap milikmu.')
+})
+it('shows strength feedback and requires confirmation before contacting the password provider',async()=>{
+ const host=await render('/settings?section=security')
+ await input(host.querySelector('#settings-current-password')!,'fixture-current')
+ await input(host.querySelector('#settings-new-password')!,'UniquePassword!123')
+ await input(host.querySelector('#settings-confirm-password')!,'UniquePassword!123')
+ expect(host.querySelector('[role="meter"]')?.getAttribute('aria-valuenow')).toBe('4')
+ await act(async()=>{host.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))})
+ expect(mock.signIn).not.toHaveBeenCalled()
+ await click(button(document,'Batal'))
+ expect(mock.signIn).not.toHaveBeenCalled()
+ expect(host.querySelector<HTMLInputElement>('#settings-new-password')?.value).toBe('UniquePassword!123')
 })
