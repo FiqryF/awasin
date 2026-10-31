@@ -284,3 +284,9 @@ Pengujian `npm run check:routes` mencakup route Feedback, form empat kategori, I
 Jangan menganggap placeholder sebagai kontrol keamanan atau pemeriksaan penipuan yang sudah berfungsi.
 
 
+
+### Foto profil akun (31 Oktober 2026)
+
+Terapkan `supabase/migrations/202610310007_account_avatars.sql` di project Supabase yang sama sebelum menggunakan unggah/hapus foto di Settings. Migrasi membuat bucket privat `account-avatars` dan aturan SELECT/INSERT/UPDATE/DELETE yang hanya mengizinkan path `<auth.uid()>/avatar.jpg` milik akun aktif. Jangan membuat bucket publik atau memakai service-role key di frontend.
+
+Frontend menerima JPG/PNG/WebP maksimal 2 MB, memotong di tengah dan mengubahnya menjadi JPEG 256×256 sebelum menyimpan. Foto dibaca melalui sesi autentikasi menjadi object URL sementara, bukan URL publik. Nama tersimpan tetap satu per akun agar penggantian foto tidak meninggalkan foto lama. Tanpa foto, avatar memakai inisial. Penghapusan foto tidak mengubah nama atau riwayat. Kegagalan konfigurasi/akses ditampilkan sebagai kegagalan, bukan keberhasilan upload. Migrasi ini harus diterapkan dan diuji di cloud; tes mock lokal bukan bukti aktivasi cloud.

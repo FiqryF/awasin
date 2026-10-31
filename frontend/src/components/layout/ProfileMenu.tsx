@@ -3,11 +3,13 @@ import { LogOut, Settings, UserRound } from 'lucide-react'
 import { Link } from 'react-router'
 import { useAuth } from '../../features/auth/useAuth'
 import { useLogout } from '../../features/auth/useLogout'
+import { useAvatar } from '../../features/settings/avatar'
 import './profile-menu.css'
 
 export function ProfileMenu({ onOpen }: Readonly<{ onOpen?: () => void }>) {
   const { identity } = useAuth()
   const confirmLogout = useLogout()
+  const avatar = useAvatar(identity?.id ?? '')
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -38,7 +40,7 @@ export function ProfileMenu({ onOpen }: Readonly<{ onOpen?: () => void }>) {
   if (!identity) return null
   return <div className="profile-menu" ref={container}>
     <button type="button" className="nav-login nav-glass" ref={trigger} aria-label="Menu akun" title="Menu akun" aria-expanded={open} aria-controls="profile-actions" onClick={() => { if (!open) { onOpen?.() }
-      setOpen(!open) }} onKeyDown={(event) => { if (event.key === 'ArrowDown') { event.preventDefault(); onOpen?.(); setOpen(true) } }}><UserRound size={20} aria-hidden="true" /></button>
+      setOpen(!open) }} onKeyDown={(event) => { if (event.key === 'ArrowDown') { event.preventDefault(); onOpen?.(); setOpen(true) } }}><span className="profile-menu-avatar">{avatar.url?<img src={avatar.url} alt=""/>:<UserRound size={20} aria-hidden="true" />}</span></button>
     {open && <fieldset id="profile-actions" className="profile-dropdown nav-glass" aria-label="Tindakan akun">
       <div className="profile-identity"><p>{identity.profile.display_name.trim() || 'Pengguna AWASIN'}</p><span>{identity.email}</span></div>
       <Link ref={firstAction} to="/settings" onClick={() => setOpen(false)}><Settings size={18} aria-hidden="true" />Pengaturan Akun</Link>
