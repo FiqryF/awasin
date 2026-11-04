@@ -96,13 +96,13 @@ describe('account disclosure and real logout integration', () => {
     const initial=mock.session.mock.calls.length
     await click(host.querySelector('[aria-label="Menu akun"]')!)
     await click(host.querySelector('.desktop-nav a[href="/education"]')!)
-    expect(mock.session.mock.calls.length).toBe(initial)
+    expect(mock.session.mock.calls).toHaveLength(initial)
     expect(host.querySelector('#profile-actions')).toBeNull()
     await act(async()=>{await navigate(-1)})
     expect(host.querySelector('#profile-actions')).toBeNull()
     await act(async()=>{await navigate(1)})
     expect(host.querySelector('#profile-actions')).toBeNull()
-    expect(mock.session.mock.calls.length).toBe(initial)
+    expect(mock.session.mock.calls).toHaveLength(initial)
   })
   it('opens with keyboard and closes with Escape while returning focus', async () => {
     const host = await render(<ProfileMenu />)

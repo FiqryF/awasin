@@ -9,6 +9,7 @@ import { changeAccountPassword } from '../features/settings/changePassword'
 import { useLogout } from '../features/auth/useLogout'
 import { FormField } from '../components/auth/FormField'
 import { PasswordField } from '../components/auth/PasswordField'
+import { HomeBackLink } from '../components/ui/HomeBackLink'
 import { DeleteHistoryDialog } from '../features/history/DeleteHistoryDialog'
 import { prepareAvatar, useAvatar } from '../features/settings/avatar'
 import { SettingsDialog } from '../features/settings/SettingsDialog'
@@ -20,6 +21,10 @@ const sections = { profile: 'Profil Saya', security: 'Keamanan Akun', privacy: '
 const sectionIcons = { profile: UserRound, security: LockKeyhole, privacy: ShieldCheck, preferences: SlidersHorizontal }
 const sectionDescriptions = { profile: 'Identitas dan informasi akun', security: 'Kata sandi dan akses akun', privacy: 'Penyimpanan dan kendali data', preferences: 'Kenyamanan tampilan' }
 const errorMessage=(error:unknown)=>error instanceof Error?error.message:'Permintaan belum berhasil. Coba lagi.'
+function profileResponse(result:unknown,owner:string):{display_name:string} {
+  if(!result||typeof result!=='object'||!('id' in result)||result.id!==owner||!('display_name' in result)||typeof result.display_name!=='string')throw new Error('Respons profil tidak valid.')
+  return {display_name:result.display_name}
+}
 
 export function SettingsPage() {
   const {identity}=useAuth()
@@ -31,7 +36,7 @@ function SettingsContent({identity}:Readonly<{identity:Identity}>) {
   const avatar=useAvatar(identity.id)
   useEffect(()=>{
     if(!dirty)return
-    const warn=(event:BeforeUnloadEvent)=>{event.preventDefault();event.returnValue=''}
+    const warn=(event:BeforeUnloadEvent)=>{event.preventDefault()}
     window.addEventListener('beforeunload',warn)
     return()=>window.removeEventListener('beforeunload',warn)
   },[dirty])
@@ -45,7 +50,7 @@ function SettingsContent({identity}:Readonly<{identity:Identity}>) {
   return <section className="settings-page" aria-labelledby="settings-title">
     <div className="settings-ambient" aria-hidden="true"><span/><span/></div>
     <UnsavedChangesGuard dirty={dirty}/>
-    <header className="settings-heading"><div><h1 id="settings-title">Pengaturan Akun</h1><p>Atur identitas, keamanan, dan pilihan privasimu di satu tempat.</p></div><div className="settings-identity"><span className="settings-avatar" aria-hidden="true">{avatar.url?<img src={avatar.url} alt="" onError={avatar.imageError}/>:initials}</span><div><strong>{identity.profile.display_name||'Pengguna AWASIN'}</strong><p>{identity.email}</p></div></div></header>
+    <header className="settings-heading"><div className="settings-title-row"><HomeBackLink to="/dashboard#beranda"/><div><h1 id="settings-title">Pengaturan Akun</h1><p>Atur identitas, keamanan, dan pilihan privasimu di satu tempat.</p></div></div><div className="settings-identity"><span className="settings-avatar" aria-hidden="true">{avatar.url?<img src={avatar.url} alt="" onError={avatar.imageError}/>:initials}</span><div><strong>{identity.profile.display_name||'Pengguna AWASIN'}</strong><p>{identity.email}</p></div></div></header>
     <div className="settings-layout">
     <nav className="settings-navigation" aria-label="Kategori pengaturan"><p className="settings-nav-label">PENGATURAN</p>{Object.entries(sections).map(([id,label])=>{const category=id as keyof typeof sections;const Icon=sectionIcons[category];return <button type="button" key={id} aria-current={selected===id?'page':undefined} onClick={()=>selectSection(id)}><Icon size={20} aria-hidden="true"/><span><strong>{label}</strong><small>{sectionDescriptions[category]}</small></span><ChevronRight className="settings-nav-arrow" size={16} aria-hidden="true"/></button>})}</nav>
     <div className="settings-content" key={selected}>
@@ -84,28 +89,33 @@ function ProfileSettings({identity,avatar,onDirty}:Readonly<{identity:Identity;a
     }catch(error){if(generation.current===started)setError(errorMessage(error))}
     finally{if(generation.current===started)setPreparing(false)}
   }
+  async function saveName(trimmed:string,started:number){
+    if(trimmed===savedName){setName(savedName);return false}
+    const response=await accountRequest('/profiles/me','PATCH',{display_name:trimmed},undefined,identity.id)
+    if(generation.current!==started)return false
+    const result=profileResponse(response,identity.id)
+    setName(result.display_name);setSavedName(result.display_name)
+    await refresh()
+    return true
+  }
+  async function savePhoto(nameSaved:boolean,started:number){
+    if(!photoDraft)return true
+    const saved=await avatar.save(photoDraft.file)
+    if(generation.current!==started)return false
+    if(!saved){setError(nameSaved?'Nama tampilan sudah tersimpan, tetapi perubahan foto belum tersimpan. Coba simpan lagi.':'Perubahan foto belum tersimpan. Coba simpan lagi.');return false}
+    setPhotoDraft(undefined)
+    return true
+  }
   async function save(event:SubmitEvent<HTMLFormElement>){
     event.preventDefault();if(locked)return
     const trimmed=name.trim()
     if(!trimmed||trimmed.length>100){setError('Nama tampilan harus berisi 1–100 karakter.');return}
     const started=generation.current
     setBusy(true);setError('');setMessage('')
-    let nameSaved=false
     try{
-      if(trimmed!==savedName){
-        const result=await accountRequest('/profiles/me','PATCH',{display_name:trimmed},undefined,identity.id)
-        if(generation.current!==started)return
-        if(!result||typeof result!=='object'||!('id' in result)||result.id!==identity.id||!('display_name' in result)||typeof result.display_name!=='string')throw new Error('Respons profil tidak valid.')
-        setName(result.display_name);setSavedName(result.display_name);nameSaved=true
-        await refresh()
-        if(generation.current!==started)return
-      }else setName(savedName)
-      if(photoDraft){
-        const saved=await avatar.save(photoDraft.file)
-        if(generation.current!==started)return
-        if(!saved){setError(nameSaved?'Nama tampilan sudah tersimpan, tetapi perubahan foto belum tersimpan. Coba simpan lagi.':'Perubahan foto belum tersimpan. Coba simpan lagi.');return}
-        setPhotoDraft(undefined)
-      }
+      const nameSaved=await saveName(trimmed,started)
+      if(generation.current!==started)return
+      if(!await savePhoto(nameSaved,started))return
       setMessage('Profil berhasil disimpan.')
     }catch(error){if(generation.current===started)setError(errorMessage(error))}
     finally{if(generation.current===started)setBusy(false)}
@@ -130,7 +140,7 @@ function ProfileSettings({identity,avatar,onDirty}:Readonly<{identity:Identity;a
     <form className="settings-form" noValidate onSubmit={save}>
       <FormField id="settings-name" label="Nama tampilan" value={name} maxLength={100} required disabled={locked} autoComplete="name" onChange={event=>{setName(event.target.value);setMessage('')}}/>
       <FormField id="settings-email" label="Email akun" type="email" value={identity.email} readOnly hint="Email dikelola oleh layanan autentikasi. Perubahan email belum tersedia di halaman ini."/>
-      {dirty&&<p role="status" className="settings-unsaved">Ada perubahan profil yang belum disimpan.</p>}
+      {dirty&&<output className="settings-unsaved">Ada perubahan profil yang belum disimpan.</output>}
       <p className="settings-verification"><ShieldCheck size={18} aria-hidden="true"/>Sesi akun telah diautentikasi. Kepemilikan alamat email tidak diverifikasi oleh AWASIN.</p>
       {error&&<p role="alert" className="settings-feedback">{error}</p>}{message&&<output className="settings-feedback">{message}</output>}
       <button type="submit" className="button button-red" disabled={locked}>{busy?'Menyimpan…':'Simpan profil'}</button>
@@ -145,11 +155,11 @@ function SecuritySettings({identity,onDirty}:Readonly<{identity:Identity;onDirty
   const [confirmChange,setConfirmChange]=useState(false)
   const dirty=Boolean(current||password||confirm)
   useEffect(()=>{onDirty(dirty);return()=>onDirty(false)},[dirty,onDirty])
-  const strength=password.length<8?0:Math.min(4,1+Number(password.length>=12)+Number(/[a-z]/.test(password)&&/[A-Z]/.test(password))+Number(/[0-9]/.test(password)&&/[^a-zA-Z0-9]/.test(password)))
+  const strength=password.length<8?0:Math.min(4,1+Number(password.length>=12)+Number(/[a-z]/.test(password)&&/[A-Z]/.test(password))+Number(/\d/.test(password)&&/[^a-zA-Z0-9]/.test(password)))
   const strengthLabel=['Terlalu pendek','Lemah','Cukup','Baik','Kuat'][strength]
   const active=useRef(true)
   useEffect(()=>{active.current=true;return()=>{active.current=false}},[])
-  async function change(event:SubmitEvent<HTMLFormElement>){
+  function change(event:SubmitEvent<HTMLFormElement>){
     event.preventDefault();if(busy)return
     const invalid=passwordError(password)
     if(!current||current.length>128||invalid||password!==confirm){setError(invalid??'Periksa kata sandi saat ini dan konfirmasi kata sandi baru.');return}
@@ -167,7 +177,7 @@ function SecuritySettings({identity,onDirty}:Readonly<{identity:Identity;onDirty
     try{await confirmLogout()}
     catch(error){if(active.current){setError(errorMessage(error));setBusy(false)}}
   }
-  return <><div className="settings-intro"><h2>Jaga akses tetap milikmu.</h2><p>Kata sandi saat ini diverifikasi kembali oleh penyedia sebelum kata sandi baru disimpan. Isinya tidak disimpan dalam profil AWASIN.</p></div><form className="settings-form" noValidate onSubmit={change}><PasswordField id="settings-current-password" label="Kata sandi saat ini" value={current} onChange={setCurrent}/><PasswordField id="settings-new-password" label="Kata sandi baru" value={password} onChange={setPassword} autoComplete="new-password" hint="Gunakan 8–128 karakter dan hindari kata sandi yang digunakan di layanan lain."/>{password&&<div className="settings-password-strength" data-strength={strength}><div className="settings-strength-track" role="meter" aria-label="Perkiraan kekuatan kata sandi" aria-valuemin={0} aria-valuemax={4} aria-valuenow={strength} aria-valuetext={strengthLabel}>{[0,1,2,3].map(index=><span key={index} data-filled={index<strength}/>)}</div><p>Kekuatan: {strengthLabel}. Gunakan kata sandi panjang dan unik; indikator ini merupakan perkiraan.</p></div>}<PasswordField id="settings-confirm-password" label="Konfirmasi kata sandi baru" value={confirm} onChange={setConfirm} autoComplete="new-password"/>{error&&<p role="alert" className="settings-feedback">{error}</p>}{changed&&<output className="settings-feedback">Kata sandi berhasil diubah. Untuk menutup sesi perangkat ini, gunakan tombol Keluar di bawah.</output>}<button type="submit" className="button button-red" disabled={busy}>{busy?'Memproses…':'Simpan kata sandi baru'}</button></form>{confirmChange&&<SettingsDialog title="Ganti kata sandi akun?" confirmLabel="Ya, ganti kata sandi" onClose={()=>setConfirmChange(false)} onConfirm={()=>void performChange()}><p>Gunakan kata sandi baru saat masuk berikutnya. Perubahan ini tidak otomatis mengeluarkan semua perangkat. Kata sandi saat ini akan diverifikasi sebelum perubahan disimpan.</p></SettingsDialog>}<div className="settings-data-row"><div><h3>Sesi perangkat ini</h3><p>Akses akun telah diverifikasi. Daftar perangkat dan lokasi login tidak dikumpulkan oleh halaman ini.</p><Link className="auth-link" to="/forgot-password">Lupa kata sandi?</Link></div><button className="button history-secondary" type="button" disabled={busy} onClick={()=>void logout()}><LogOut size={18} aria-hidden="true"/>Keluar</button></div></>
+  return <><div className="settings-intro"><h2>Jaga akses tetap milikmu.</h2><p>Kata sandi saat ini diverifikasi kembali oleh penyedia sebelum kata sandi baru disimpan. Isinya tidak disimpan dalam profil AWASIN.</p></div><form className="settings-form" noValidate onSubmit={change}><PasswordField id="settings-current-password" label="Kata sandi saat ini" value={current} onChange={setCurrent}/><PasswordField id="settings-new-password" label="Kata sandi baru" value={password} onChange={setPassword} autoComplete="new-password" hint="Gunakan 8–128 karakter dan hindari kata sandi yang digunakan di layanan lain."/>{password&&<div className="settings-password-strength" data-strength={strength}><meter className="sr-only" min={0} max={4} value={strength} aria-label="Perkiraan kekuatan kata sandi" aria-valuetext={strengthLabel}>{strengthLabel}</meter><div className="settings-strength-track" aria-hidden="true">{[0,1,2,3].map(index=><span key={index} data-filled={index<strength}/>)}</div><p>Kekuatan: {strengthLabel}. Gunakan kata sandi panjang dan unik; indikator ini merupakan perkiraan.</p></div>}<PasswordField id="settings-confirm-password" label="Konfirmasi kata sandi baru" value={confirm} onChange={setConfirm} autoComplete="new-password"/>{error&&<p role="alert" className="settings-feedback">{error}</p>}{changed&&<output className="settings-feedback">Kata sandi berhasil diubah. Untuk menutup sesi perangkat ini, gunakan tombol Keluar di bawah.</output>}<button type="submit" className="button button-red" disabled={busy}>{busy?'Memproses…':'Simpan kata sandi baru'}</button></form>{confirmChange&&<SettingsDialog title="Ganti kata sandi akun?" confirmLabel="Ya, ganti kata sandi" onClose={()=>setConfirmChange(false)} onConfirm={()=>void performChange()}><p>Gunakan kata sandi baru saat masuk berikutnya. Perubahan ini tidak otomatis mengeluarkan semua perangkat. Kata sandi saat ini akan diverifikasi sebelum perubahan disimpan.</p></SettingsDialog>}<div className="settings-data-row"><div><h3>Sesi perangkat ini</h3><p>Akses akun telah diverifikasi. Daftar perangkat dan lokasi login tidak dikumpulkan oleh halaman ini.</p><Link className="auth-link" to="/forgot-password">Lupa kata sandi?</Link></div><button className="button history-secondary" type="button" disabled={busy} onClick={()=>void logout()}><LogOut size={18} aria-hidden="true"/>Keluar</button></div></>
 }
 
 function PreferenceEditor({kind}:Readonly<{kind:'history'|'animation'}>) {

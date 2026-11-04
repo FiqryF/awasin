@@ -1,4 +1,6 @@
 .settings-page { padding-bottom: 48px; }
+.settings-title-row { display: flex; align-items: center; gap: 20px; min-width: 0; }
+.settings-title-row > div { min-width: 0; }
 .settings-heading { display: flex; justify-content: space-between; align-items: center; gap: 32px; margin-bottom: 32px; }
 .settings-heading h1 { font-size: clamp(2rem, 3.5vw, 3rem); font-weight: 750; line-height: 1.15; letter-spacing: -.035em; }
 .settings-heading p, .settings-intro p, .settings-data-row p, .settings-footnote, .settings-danger p { color: #c8d0be; line-height: 1.8; max-width: 68ch; margin-top: 14px; }
@@ -99,7 +101,7 @@
 .settings-photo-actions .button { min-height: 42px; padding: 10px 18px; font-size: .8125rem; }
 .settings-file-input { display: none; }
 .settings-profile-summary .settings-photo-hint { font-size: .6875rem; line-height: 1.6; color: #a9b39e; margin-top: 12px; }
-.settings-unsaved { padding: 12px 16px; border-left: 2px solid #e79a7c; color: #f5d5c5; background: rgb(135 0 2 / 15%); border-radius: 8px; font-size: .8125rem; line-height: 1.6; }
+.settings-unsaved { display: block; padding: 12px 16px; border-left: 2px solid #e79a7c; color: #f5d5c5; background: rgb(135 0 2 / 15%); border-radius: 8px; font-size: .8125rem; line-height: 1.6; }
 .settings-password-strength { margin-top: -12px; }
 .settings-strength-track { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .settings-strength-track span { height: 5px; border-radius: 8px; background: rgb(245 255 233 / 12%); }

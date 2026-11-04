@@ -25,6 +25,15 @@ export async function prepareAvatar(file: File): Promise<Blob> {
     return await new Promise<Blob>((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Foto belum dapat diproses.')), 'image/jpeg', .88))
   } finally { bitmap.close() }
 }
+async function persistAvatar(storage: Awaited<ReturnType<typeof avatarStorage>>, owner: string, blob: Blob | null) {
+  if (blob) {
+    const result = await storage.upload(`${owner}/avatar.jpg`, blob, { upsert: true, contentType: 'image/jpeg', cacheControl: '0' })
+    if (result.error) throw new Error('Foto belum tersimpan. Periksa koneksi dan pastikan penyimpanan avatar telah dikonfigurasi.')
+    return
+  }
+  const result = await storage.remove([`${owner}/avatar.jpg`])
+  if (result.error || !result.data?.some(item => item.name === `${owner}/avatar.jpg`)) throw new Error('Foto belum berhasil dihapus. Muat ulang dan coba lagi.')
+}
 export function useAvatar(owner: string) {
   const [image, setImage] = useState<{owner:string;url:string}|null>(null)
   const [error, setError] = useState('')
@@ -82,13 +91,7 @@ export function useAvatar(owner: string) {
     try {
       const blob = file ? await prepareAvatar(file) : null
       const storage = await avatarStorage(owner)
-      if (blob) {
-        const result = await storage.upload(`${owner}/avatar.jpg`, blob, { upsert: true, contentType: 'image/jpeg', cacheControl: '0' })
-        if (result.error) throw new Error('Foto belum tersimpan. Periksa koneksi dan pastikan penyimpanan avatar telah dikonfigurasi.')
-      } else {
-        const result = await storage.remove([`${owner}/avatar.jpg`])
-        if (result.error || !result.data?.some(item => item.name === `${owner}/avatar.jpg`)) throw new Error('Foto belum berhasil dihapus. Muat ulang dan coba lagi.')
-      }
+      await persistAvatar(storage, owner, blob)
       await avatarStorage(owner)
       if (!active.current || generation.current !== started) return false
       window.dispatchEvent(new CustomEvent<AvatarChange>(changed, { detail: { owner, blob } }))

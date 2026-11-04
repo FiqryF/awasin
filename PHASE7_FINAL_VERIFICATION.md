@@ -11,6 +11,20 @@ Phase 7 belum fully verified dan laporan ini tidak menyatakan production ready.
 
 ## Final closure da4907d9 — checkpoint A4, 4 November 2026
 
+SonarQube follow-up: 16 temuan pada screenshot ditangani melalui penghapusan regex
+trailing slash berpotensi backtracking, Promise.all untuk probe HTTP independen,
+pemisahan fungsi save profil/avatar, penggantian returnValue deprecated dengan
+preventDefault, output/meter native, regex digit ringkas, handler sinkron dan
+assertion toHaveLength. Visual empat bar kekuatan sandi dipertahankan; meter
+native menjadi representasi aksesibelnya. Regresi beforeunload memeriksa guard
+aktif hanya saat draft kotor. Tidak menambah suppression atau menonaktifkan rule.
+Regresi terbaru: 235 frontend PASS, lint/build PASS, 31 HTTP baca-saja PASS.
+SonarQube analyzer IDE tidak dijalankan lewat CLI; jumlah diagnostik nol perlu
+dikonfirmasi melalui analisis ulang ekstensi, bukan disimpulkan dari ESLint.
+Follow-up delapan temuan checker: loop kini hanya menyusun descriptor probe,
+pasangan descriptor memakai satu push, dan eksekusi dilakukan sekali melalui
+top-level `await Promise.all(probes.map(probe))`. Lint dan 31/31 HTTP kembali PASS.
+
 Bagian ini menggantikan status avatar/API pending pada checkpoint A3 di bawah.
 Branch `main`; HEAD `a76ab1483f3410d879f3cc336e86a42f48e6a07c`, perubahan lama
 dipertahankan. D/E/F tidak diulang. Tidak ada migrasi, policy/role change, commit,
