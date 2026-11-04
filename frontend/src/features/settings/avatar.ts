@@ -3,6 +3,7 @@ import { requireSupabase } from '../auth/client'
 
 const bucket = 'account-avatars'
 const changed = 'awasin-avatar-change'
+type AvatarChange = { owner: string; blob: Blob | null }
 export async function avatarStorage(owner: string) {
   const client = requireSupabase()
   const { data, error } = await client.auth.getSession()
@@ -11,7 +12,7 @@ export async function avatarStorage(owner: string) {
 }
 export async function prepareAvatar(file: File): Promise<Blob> {
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || !file.size || file.size > 2 * 1024 * 1024) throw new Error('Pilih foto JPG, PNG, atau WebP maksimal 2 MB.')
-  const bitmap = await createImageBitmap(file)
+  const bitmap = await createImageBitmap(file).catch(() => { throw new Error('Foto tidak dapat dibaca. Pilih gambar JPG, PNG, atau WebP yang valid.') })
   try {
     if (bitmap.width * bitmap.height > 24_000_000) throw new Error('Resolusi foto terlalu besar. Gunakan foto di bawah 24 megapiksel.')
     const canvas = document.createElement('canvas')
@@ -28,38 +29,55 @@ export function useAvatar(owner: string) {
   const [image, setImage] = useState<{owner:string;url:string}|null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const [revision, setRevision] = useState(0)
   const active = useRef(true)
+  const generation = useRef(0)
   const saving = useRef(false)
   useEffect(() => { active.current = true; return () => { active.current = false } }, [])
   useEffect(() => {
-    const reload = () => setRevision(value => value + 1)
-    window.addEventListener(changed, reload)
-    return () => window.removeEventListener(changed, reload)
-  }, [])
-  useEffect(() => {
     let cancelled = false
+    let updated = false
     let objectUrl: string | undefined
+    function replace(blob: Blob | null) {
+      const previous = objectUrl
+      objectUrl = blob ? URL.createObjectURL(blob) : undefined
+      setImage(objectUrl ? { owner, url: objectUrl } : null)
+      setError('')
+      if (previous) URL.revokeObjectURL(previous)
+    }
+    function receive(event: Event) {
+      const detail = (event as CustomEvent<AvatarChange>).detail
+      if (detail?.owner !== owner) return
+      updated = true
+      replace(detail.blob)
+    }
     if(!owner)return
+    window.addEventListener(changed, receive)
     async function load() {
       try {
         const storage = await avatarStorage(owner)
         const listed = await storage.list(owner, { search: 'avatar.jpg', limit: 10 })
         if (listed.error) throw listed.error
-        if(cancelled)return
+        if(cancelled || updated)return
         setError('')
         if (!listed.data.some(file => file.name === 'avatar.jpg')) { setImage(null); return }
-        const result = await storage.download(`${owner}/avatar.jpg`)
+        const result = await storage.download(`${owner}/avatar.jpg`, { cacheNonce: crypto.randomUUID() }, { cache: 'no-store' })
         if (result.error) throw result.error
-        if (!cancelled) { objectUrl = URL.createObjectURL(result.data); setImage({owner,url:objectUrl}) }
-      } catch { if (!cancelled) { setImage(null); setError('Foto profil belum dapat dimuat. Periksa koneksi atau konfigurasi penyimpanan avatar.') } }
+        if (!cancelled && !updated) replace(result.data)
+      } catch { if (!cancelled && !updated) { setImage(null); setError('Foto profil belum dapat dimuat. Periksa koneksi atau konfigurasi penyimpanan avatar.') } }
     }
     void load()
-    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl) }
-  }, [owner, revision])
+    return () => {
+      cancelled = true
+      generation.current += 1
+      window.removeEventListener(changed, receive)
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+      setImage(null)
+    }
+  }, [owner])
   async function save(file: File | null) {
     if (saving.current) return
     saving.current = true
+    const started = generation.current
     setBusy(true); setError('')
     try {
       const blob = file ? await prepareAvatar(file) : null
@@ -71,12 +89,18 @@ export function useAvatar(owner: string) {
         const result = await storage.remove([`${owner}/avatar.jpg`])
         if (result.error || !result.data?.some(item => item.name === `${owner}/avatar.jpg`)) throw new Error('Foto belum berhasil dihapus. Muat ulang dan coba lagi.')
       }
-      window.dispatchEvent(new Event(changed))
+      await avatarStorage(owner)
+      if (!active.current || generation.current !== started) return false
+      window.dispatchEvent(new CustomEvent<AvatarChange>(changed, { detail: { owner, blob } }))
       return true
     } catch (error) {
-      if (active.current) setError(error instanceof Error ? error.message : 'Foto belum dapat diproses.')
+      if (active.current && generation.current === started) setError(error instanceof Error ? error.message : 'Foto belum dapat diproses.')
       return false
     } finally { saving.current = false; if (active.current) setBusy(false) }
   }
-  return { url: image?.owner===owner?image.url:null, error, busy, save }
+  function imageError() {
+    setImage(null)
+    setError('Foto profil tidak dapat ditampilkan. Pilih gambar lain atau coba lagi.')
+  }
+  return { url: image?.owner===owner?image.url:null, error, busy, save, imageError }
 }

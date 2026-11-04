@@ -98,7 +98,7 @@ export function FloatingNavbar() {
         <div className="nav-actions">
           <nav ref={desktopNav} className="desktop-nav nav-glass" aria-label="Navigasi utama"><NavIndicator nav={desktopNav} active={links.find(item => item.active)?.id} reducedMotion={reducedMotion} />{links.map((item) => <Link key={item.id} to={item.to} aria-current={item.active ? item.current : undefined}>{item.label}{item.id === 'feedback' && <ArrowUpRight size={15} aria-hidden="true" />}</Link>)}</nav>
           <button type="button" ref={trigger} className="menu-trigger nav-glass" aria-label={open ? 'Tutup menu navigasi' : 'Buka menu navigasi'} aria-expanded={open} aria-controls="mobile-navigation" onClick={() => setOpen(!open)}>{open ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}</button>
-          {identity ? <ProfileMenu key={`${identity.id}:${location.key}`} onOpen={() => setOpen(false)} /> : <Link to="/login" className="nav-login nav-glass" aria-label="Masuk ke akun AWASIN" title="Masuk" onClick={() => setOpen(false)}><LogIn size={20} aria-hidden="true" /></Link>}
+          {identity ? <ProfileMenu key={identity.id} onOpen={() => setOpen(false)} /> : <Link to="/login" className="nav-login nav-glass" aria-label="Masuk ke akun AWASIN" title="Masuk" onClick={() => setOpen(false)}><LogIn size={20} aria-hidden="true" /></Link>}
         </div>
       </div>
       {open && <motion.nav id="mobile-navigation" className="mobile-nav nav-glass" aria-label="Navigasi mobile" initial={reducedMotion ? false : { opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reducedMotion ? 0 : 0.22 }}>

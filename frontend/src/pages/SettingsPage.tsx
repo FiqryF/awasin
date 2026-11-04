@@ -10,7 +10,7 @@ import { useLogout } from '../features/auth/useLogout'
 import { FormField } from '../components/auth/FormField'
 import { PasswordField } from '../components/auth/PasswordField'
 import { DeleteHistoryDialog } from '../features/history/DeleteHistoryDialog'
-import { useAvatar } from '../features/settings/avatar'
+import { prepareAvatar, useAvatar } from '../features/settings/avatar'
 import { SettingsDialog } from '../features/settings/SettingsDialog'
 import { UnsavedChangesGuard } from '../features/settings/UnsavedChangesGuard'
 import { passwordError } from '../features/auth/policy'
@@ -45,7 +45,7 @@ function SettingsContent({identity}:Readonly<{identity:Identity}>) {
   return <section className="settings-page" aria-labelledby="settings-title">
     <div className="settings-ambient" aria-hidden="true"><span/><span/></div>
     <UnsavedChangesGuard dirty={dirty}/>
-    <header className="settings-heading"><div><h1 id="settings-title">Pengaturan Akun</h1><p>Atur identitas, keamanan, dan pilihan privasimu di satu tempat.</p></div><div className="settings-identity"><span className="settings-avatar" aria-hidden="true">{avatar.url?<img src={avatar.url} alt=""/>:initials}</span><div><strong>{identity.profile.display_name||'Pengguna AWASIN'}</strong><p>{identity.email}</p></div></div></header>
+    <header className="settings-heading"><div><h1 id="settings-title">Pengaturan Akun</h1><p>Atur identitas, keamanan, dan pilihan privasimu di satu tempat.</p></div><div className="settings-identity"><span className="settings-avatar" aria-hidden="true">{avatar.url?<img src={avatar.url} alt="" onError={avatar.imageError}/>:initials}</span><div><strong>{identity.profile.display_name||'Pengguna AWASIN'}</strong><p>{identity.email}</p></div></div></header>
     <div className="settings-layout">
     <nav className="settings-navigation" aria-label="Kategori pengaturan"><p className="settings-nav-label">PENGATURAN</p>{Object.entries(sections).map(([id,label])=>{const category=id as keyof typeof sections;const Icon=sectionIcons[category];return <button type="button" key={id} aria-current={selected===id?'page':undefined} onClick={()=>selectSection(id)}><Icon size={20} aria-hidden="true"/><span><strong>{label}</strong><small>{sectionDescriptions[category]}</small></span><ChevronRight className="settings-nav-arrow" size={16} aria-hidden="true"/></button>})}</nav>
     <div className="settings-content" key={selected}>
@@ -63,27 +63,81 @@ function ProfileSettings({identity,avatar,onDirty}:Readonly<{identity:Identity;a
   const [name,setName]=useState(identity.profile.display_name)
   const [savedName,setSavedName]=useState(identity.profile.display_name)
   const fileInput=useRef<HTMLInputElement>(null)
-  const [photoMessage,setPhotoMessage]=useState('')
+  const [photoDraft,setPhotoDraft]=useState<{file:File|null;url:string|null}>()
+  const [preparing,setPreparing]=useState(false)
   const [removePhoto,setRemovePhoto]=useState(false)
-  const dirty=name!==savedName
+  const generation=useRef(0)
+  useEffect(()=>()=>{generation.current+=1},[])
+  useEffect(()=>()=>{if(photoDraft?.url)URL.revokeObjectURL(photoDraft.url)},[photoDraft])
+  const dirty=name!==savedName||photoDraft!==undefined
   useEffect(()=>{onDirty(dirty);return()=>onDirty(false)},[dirty,onDirty])
   const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('')
+  const locked=busy||preparing||avatar.busy
+  const photoUrl=photoDraft?photoDraft.url:avatar.url
+  async function choosePhoto(file:File){
+    const started=++generation.current
+    setPreparing(true);setError('');setMessage('')
+    try{
+      const blob=await prepareAvatar(file)
+      if(generation.current!==started)return
+      setPhotoDraft({file,url:URL.createObjectURL(blob)})
+    }catch(error){if(generation.current===started)setError(errorMessage(error))}
+    finally{if(generation.current===started)setPreparing(false)}
+  }
   async function save(event:SubmitEvent<HTMLFormElement>){
-    event.preventDefault();if(busy)return
+    event.preventDefault();if(locked)return
     const trimmed=name.trim()
     if(!trimmed||trimmed.length>100){setError('Nama tampilan harus berisi 1–100 karakter.');return}
+    const started=generation.current
     setBusy(true);setError('');setMessage('')
+    let nameSaved=false
     try{
-      const result=await accountRequest('/profiles/me','PATCH',{display_name:trimmed},undefined,identity.id)
-      if(!result||typeof result!=='object'||!('id' in result)||result.id!==identity.id||!('display_name' in result)||typeof result.display_name!=='string')throw new Error('Respons profil tidak valid.')
-      setName(result.display_name);setSavedName(result.display_name);setMessage('Nama tampilan berhasil disimpan.')
-      await refresh()
-    }catch(error){setError(errorMessage(error))}finally{setBusy(false)}
+      if(trimmed!==savedName){
+        const result=await accountRequest('/profiles/me','PATCH',{display_name:trimmed},undefined,identity.id)
+        if(generation.current!==started)return
+        if(!result||typeof result!=='object'||!('id' in result)||result.id!==identity.id||!('display_name' in result)||typeof result.display_name!=='string')throw new Error('Respons profil tidak valid.')
+        setName(result.display_name);setSavedName(result.display_name);nameSaved=true
+        await refresh()
+        if(generation.current!==started)return
+      }else setName(savedName)
+      if(photoDraft){
+        const saved=await avatar.save(photoDraft.file)
+        if(generation.current!==started)return
+        if(!saved){setError(nameSaved?'Nama tampilan sudah tersimpan, tetapi perubahan foto belum tersimpan. Coba simpan lagi.':'Perubahan foto belum tersimpan. Coba simpan lagi.');return}
+        setPhotoDraft(undefined)
+      }
+      setMessage('Profil berhasil disimpan.')
+    }catch(error){if(generation.current===started)setError(errorMessage(error))}
+    finally{if(generation.current===started)setBusy(false)}
   }
   const initials=(identity.profile.display_name||identity.email).split(/\s+/).slice(0,2).map(word=>word[0]).join('').toLocaleUpperCase('id-ID')
-  return <><div className="settings-profile-summary"><span className="settings-avatar settings-avatar-large" aria-hidden="true">{avatar.url?<img src={avatar.url} alt=""/>:initials}</span><div><span className="settings-profile-label">PROFIL AWASIN</span><h3>{identity.profile.display_name||'Pengguna AWASIN'}</h3><p>{identity.email}</p><div className="settings-photo-actions"><input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" className="settings-file-input" aria-label="Pilih foto profil" disabled={avatar.busy} onChange={event=>{const file=event.target.files?.[0];event.target.value='';if(file){setPhotoMessage('');void avatar.save(file).then(saved=>{if(saved)setPhotoMessage('Foto profil berhasil disimpan.')})}}}/><button type="button" className="button button-red" disabled={avatar.busy} onClick={()=>fileInput.current?.click()}>{avatar.busy?'Memproses…':'Unggah foto'}</button><button type="button" className="button history-secondary" disabled={avatar.busy||!avatar.url} onClick={()=>setRemovePhoto(true)}>Hapus foto</button></div><p className="settings-photo-hint">JPG, PNG, atau WebP · Maks. 2 MB · Dipotong otomatis di tengah</p></div></div>{avatar.error&&<p className="settings-feedback">{avatar.error}</p>}{photoMessage&&<p role="status" className="settings-feedback">{photoMessage}</p>}{removePhoto&&<SettingsDialog title="Hapus foto profil?" confirmLabel="Ya, hapus foto" onClose={()=>setRemovePhoto(false)} onConfirm={()=>{setRemovePhoto(false);setPhotoMessage('');void avatar.save(null).then(saved=>{if(saved)setPhotoMessage('Foto profil dihapus. Avatar kembali menggunakan inisial.')})}}><p>Foto akan dihapus dari akunmu dan diganti dengan inisial.</p></SettingsDialog>}<div className="settings-intro"><h2>Identitas yang kamu gunakan.</h2><p>Nama tampilan dipakai pada sapaan dashboard dan menu akunmu.</p></div><form className="settings-form" noValidate onSubmit={save}><FormField id="settings-name" label="Nama tampilan" value={name} maxLength={100} required autoComplete="name" onChange={event=>setName(event.target.value)}/><FormField id="settings-email" label="Email akun" type="email" value={identity.email} readOnly hint="Email dikelola oleh layanan autentikasi. Perubahan email belum tersedia di halaman ini."/>{dirty&&<p role="status" className="settings-unsaved">Ada perubahan nama yang belum disimpan.</p>}<p className="settings-verification"><ShieldCheck size={18} aria-hidden="true"/>Sesi akun telah diautentikasi. Kepemilikan alamat email tidak diverifikasi oleh AWASIN.</p>{error&&<p role="alert" className="settings-feedback">{error}</p>}{message&&<output className="settings-feedback">{message}</output>}<button type="submit" className="button button-red" disabled={busy}>{busy?'Menyimpan…':'Simpan nama tampilan'}</button></form><p className="settings-footnote">Foto profil disimpan terpisah dari laporan pemeriksaan. Tanpa foto, avatar menggunakan inisial namamu.</p></>
+  return <>
+    <div className="settings-profile-summary">
+      <span className="settings-avatar settings-avatar-large" aria-hidden="true">{photoUrl?<img src={photoUrl} alt="" onError={()=>{if(photoDraft){setPhotoDraft(undefined);setError('Foto tidak dapat ditampilkan. Pilih gambar lain.')}else avatar.imageError()}}/>:initials}</span>
+      <div><span className="settings-profile-label">PROFIL AWASIN</span><h3>{identity.profile.display_name||'Pengguna AWASIN'}</h3><p>{identity.email}</p>
+        <div className="settings-photo-actions">
+          <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" className="settings-file-input" aria-label="Pilih foto profil" disabled={locked} onChange={event=>{const file=event.target.files?.[0];event.target.value='';if(file)void choosePhoto(file)}}/>
+          <button type="button" className="button button-red" disabled={locked} onClick={()=>fileInput.current?.click()}>{preparing?'Memproses…':'Pilih foto'}</button>
+          <button type="button" className="button history-secondary" disabled={locked||!photoUrl} onClick={()=>setRemovePhoto(true)}>Hapus foto</button>
+        </div>
+        <p className="settings-photo-hint">JPG, PNG, atau WebP · Maks. 2 MB · Dipotong otomatis di tengah</p>
+        <p className="settings-photo-hint">Perubahan foto diterapkan setelah menekan Simpan profil.</p>
+      </div>
+    </div>
+    {avatar.error&&<p className="settings-feedback">{avatar.error}</p>}
+    {removePhoto&&<SettingsDialog title="Hapus foto profil?" confirmLabel="Ya, hapus foto" onClose={()=>setRemovePhoto(false)} onConfirm={()=>{setRemovePhoto(false);setPhotoDraft(avatar.url?{file:null,url:null}:undefined);setError('');setMessage('')}}><p>Foto akan dihapus setelah kamu menekan Simpan profil. Sebelum disimpan, foto di akunmu tetap tersedia.</p></SettingsDialog>}
+    <div className="settings-intro"><h2>Identitas yang kamu gunakan.</h2><p>Nama tampilan dipakai pada sapaan dashboard dan menu akunmu.</p></div>
+    <form className="settings-form" noValidate onSubmit={save}>
+      <FormField id="settings-name" label="Nama tampilan" value={name} maxLength={100} required disabled={locked} autoComplete="name" onChange={event=>{setName(event.target.value);setMessage('')}}/>
+      <FormField id="settings-email" label="Email akun" type="email" value={identity.email} readOnly hint="Email dikelola oleh layanan autentikasi. Perubahan email belum tersedia di halaman ini."/>
+      {dirty&&<p role="status" className="settings-unsaved">Ada perubahan profil yang belum disimpan.</p>}
+      <p className="settings-verification"><ShieldCheck size={18} aria-hidden="true"/>Sesi akun telah diautentikasi. Kepemilikan alamat email tidak diverifikasi oleh AWASIN.</p>
+      {error&&<p role="alert" className="settings-feedback">{error}</p>}{message&&<output className="settings-feedback">{message}</output>}
+      <button type="submit" className="button button-red" disabled={locked}>{busy?'Menyimpan…':'Simpan profil'}</button>
+    </form>
+    <p className="settings-footnote">Foto profil disimpan terpisah dari laporan pemeriksaan. Tanpa foto, avatar menggunakan inisial namamu.</p>
+  </>
 }
-
 function SecuritySettings({identity,onDirty}:Readonly<{identity:Identity;onDirty:(value:boolean)=>void}>) {
   const confirmLogout = useLogout()
   const [current,setCurrent]=useState(''),[password,setPassword]=useState(''),[confirm,setConfirm]=useState('')

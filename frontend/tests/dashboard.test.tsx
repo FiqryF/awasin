@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router'
 import { AuthContext } from '../src/features/auth/context'
 import type { AuthState } from '../src/features/auth/context'
 import { ProtectedRoute } from '../src/features/auth/ProtectedRoute'
@@ -12,8 +12,8 @@ import { ProfileMenu } from '../src/components/layout/ProfileMenu'
 import { HomePage } from '../src/pages/HomePage'
 import { AuthNotificationProvider } from '../src/features/auth/AuthNotificationProvider'
 
-const mock = vi.hoisted(() => ({ logout: vi.fn() }))
-vi.mock('../src/features/auth/client', () => ({ requireSupabase: () => ({ auth: { getSession: async () => ({ data: { session: null }, error: null }) } }) }))
+const mock = vi.hoisted(() => ({ logout: vi.fn(), session: vi.fn() }))
+vi.mock('../src/features/auth/client', () => ({ requireSupabase: () => ({ auth: { getSession: mock.session } }) }))
 vi.mock('../src/features/history/api', () => ({ listHistory: vi.fn(async () => ({ items: [], next_cursor: null })) }))
 vi.mock('../src/features/auth/actions', () => ({ createAuthActions: () => ({ logout: mock.logout }) }))
 const identity = { id: 'fixture-user', email: 'fixture@example.invalid', role: 'user' as const, aal: 'aal1' as const, profile: { id: 'fixture-user', display_name: 'Pengguna Uji' } }
@@ -28,6 +28,7 @@ beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn()
   window.scrollTo = vi.fn()
   mock.logout.mockResolvedValue(undefined)
+  mock.session.mockResolvedValue({data:{session:null},error:null})
 })
 afterEach(async () => { if (cleanup) await act(async () => cleanup()); vi.unstubAllGlobals() })
 
@@ -88,6 +89,21 @@ describe('authenticated dashboard foundation', () => {
 })
 
 describe('account disclosure and real logout integration', () => {
+  it('retains the avatar hook across navigation while closing the profile disclosure', async () => {
+    let navigate!:ReturnType<typeof useNavigate>
+    function Probe(){navigate=useNavigate();return <FloatingNavbar/>}
+    const host=await render(<Probe />)
+    const initial=mock.session.mock.calls.length
+    await click(host.querySelector('[aria-label="Menu akun"]')!)
+    await click(host.querySelector('.desktop-nav a[href="/education"]')!)
+    expect(mock.session.mock.calls.length).toBe(initial)
+    expect(host.querySelector('#profile-actions')).toBeNull()
+    await act(async()=>{await navigate(-1)})
+    expect(host.querySelector('#profile-actions')).toBeNull()
+    await act(async()=>{await navigate(1)})
+    expect(host.querySelector('#profile-actions')).toBeNull()
+    expect(mock.session.mock.calls.length).toBe(initial)
+  })
   it('opens with keyboard and closes with Escape while returning focus', async () => {
     const host = await render(<ProfileMenu />)
     const trigger = host.querySelector('button')!

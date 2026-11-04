@@ -11,14 +11,18 @@ import { usePrefersReducedMotion } from '../src/hooks/usePrefersReducedMotion'
 import { SaveReportAction } from '../src/features/history/SaveReportAction'
 import type { ReportDetail } from '../src/features/history/contracts'
 
-const mock=vi.hoisted(()=>({request:vi.fn(),read:vi.fn(),save:vi.fn(),update:vi.fn(),refresh:vi.fn(),signIn:vi.fn(),updateUser:vi.fn(),signOut:vi.fn()}))
+const mock=vi.hoisted(()=>({request:vi.fn(),read:vi.fn(),save:vi.fn(),update:vi.fn(),refresh:vi.fn(),signIn:vi.fn(),updateUser:vi.fn(),signOut:vi.fn(),session:vi.fn(),list:vi.fn(),download:vi.fn(),upload:vi.fn(),remove:vi.fn()}))
 vi.mock('../src/features/settings/api',async original=>({...await original<object>(),accountRequest:mock.request,getPreferences:mock.read,savePreferences:mock.save}))
-vi.mock('../src/features/auth/client',()=>({reauthenticationClient:()=>({auth:{signInWithPassword:mock.signIn,updateUser:mock.updateUser,signOut:mock.signOut}}),requireSupabase:()=>({auth:{signOut:mock.signOut,getSession:async()=>({data:{session:null},error:null})}})}))
+vi.mock('../src/features/auth/client',()=>({reauthenticationClient:()=>({auth:{signInWithPassword:mock.signIn,updateUser:mock.updateUser,signOut:mock.signOut}}),requireSupabase:()=>({auth:{signOut:mock.signOut,getSession:mock.session},storage:{from:()=>({list:mock.list,download:mock.download,upload:mock.upload,remove:mock.remove})}})}))
 const identity={id:'fixture-owner',email:'fixture@example.invalid',role:'user' as const,aal:'aal1' as const,profile:{id:'fixture-owner',display_name:'Nama Fixture'}}
 let cleanup:(()=>void)|undefined
+let testRouter:ReturnType<typeof createMemoryRouter>
 beforeEach(()=>{
  Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true})
  vi.clearAllMocks()
+ mock.session.mockResolvedValue({data:{session:null},error:null})
+ mock.list.mockResolvedValue({data:[],error:null})
+ mock.upload.mockResolvedValue({data:{},error:null})
  HTMLDialogElement.prototype.showModal=function(){this.open=true}
  HTMLDialogElement.prototype.close=function(){this.open=false}
  vi.stubGlobal('matchMedia',vi.fn(()=>({matches:false,addEventListener:vi.fn(),removeEventListener:vi.fn(),addListener:vi.fn(),removeListener:vi.fn()})))
@@ -31,7 +35,8 @@ beforeEach(()=>{
 afterEach(async()=>{if(cleanup)await act(async()=>cleanup?.());cleanup=undefined;vi.unstubAllGlobals();delete document.documentElement.dataset.accountMotion})
 async function render(path='/settings',content=<SettingsPage/>) {
  const host=document.createElement('div');document.body.append(host);const root=createRoot(host)
- await act(async()=>root.render(<AuthContext.Provider value={{identity,loading:false,error:'',refresh:mock.refresh}}><PreferencesContext.Provider value={{value:{history_retention:'manual',animation:'system'},error:'',update:mock.update,reload:vi.fn()}}><RouterProvider router={createMemoryRouter([{path:"*",element:content}],{initialEntries:[path]})}/></PreferencesContext.Provider></AuthContext.Provider>))
+ testRouter=createMemoryRouter([{path:"*",element:content}],{initialEntries:[path]})
+ await act(async()=>root.render(<AuthContext.Provider value={{identity,loading:false,error:'',refresh:mock.refresh}}><PreferencesContext.Provider value={{value:{history_retention:'manual',animation:'system'},error:'',update:mock.update,reload:vi.fn()}}><RouterProvider router={testRouter}/></PreferencesContext.Provider></AuthContext.Provider>))
  cleanup=()=>{root.unmount();host.remove()};return host
 }
 async function click(element:Element){await act(async()=>{element.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,button:0}))})}
@@ -139,4 +144,125 @@ it('shows strength feedback and requires confirmation before contacting the pass
  await click(button(document,'Batal'))
  expect(mock.signIn).not.toHaveBeenCalled()
  expect(host.querySelector<HTMLInputElement>('#settings-new-password')?.value).toBe('UniquePassword!123')
+})
+
+function avatarEnvironment(existing=false) {
+ mock.session.mockResolvedValue({data:{session:{user:{id:identity.id}}},error:null})
+ mock.list.mockResolvedValue({data:existing?[{name:'avatar.jpg'}]:[],error:null})
+ mock.download.mockResolvedValue({data:new Blob(['saved']),error:null})
+ mock.remove.mockResolvedValue({data:[{name:`${identity.id}/avatar.jpg`}],error:null})
+ let serial=0
+ vi.stubGlobal('URL',Object.assign(URL,{createObjectURL:vi.fn(()=>`blob:photo-${++serial}`),revokeObjectURL:vi.fn()}))
+ vi.stubGlobal('createImageBitmap',vi.fn(async()=>({width:100,height:100,close:vi.fn()})))
+ vi.spyOn(HTMLCanvasElement.prototype,'getContext').mockReturnValue({fillRect:vi.fn(),drawImage:vi.fn()} as unknown as CanvasRenderingContext2D)
+ vi.spyOn(HTMLCanvasElement.prototype,'toBlob').mockImplementation(callback=>callback(new Blob(['jpg'],{type:'image/jpeg'})))
+}
+async function choosePhoto(host:HTMLElement) {
+ const field=host.querySelector<HTMLInputElement>('input[type=file]')!
+ Object.defineProperty(field,'files',{configurable:true,value:[new File(['photo'],'photo.png',{type:'image/png'})]})
+ await act(async()=>field.dispatchEvent(new Event('change',{bubbles:true})))
+}
+async function submitProfile(host:HTMLElement) {
+ await act(async()=>host.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})))
+}
+it('previews a chosen photo locally and uploads only after saving the profile',async()=>{
+ avatarEnvironment()
+ const host=await render()
+ await choosePhoto(host)
+ expect(host.querySelector('.settings-avatar-large img')).not.toBeNull()
+ expect(host.querySelector('.settings-heading img')).toBeNull()
+ expect(mock.upload).not.toHaveBeenCalled()
+ expect(host.textContent).toContain('belum disimpan')
+ await input(host.querySelector('#settings-name')!,'')
+ await submitProfile(host)
+ expect(mock.upload).not.toHaveBeenCalled()
+ await input(host.querySelector('#settings-name')!,`  ${identity.profile.display_name}  `)
+ await submitProfile(host)
+ expect(mock.upload).toHaveBeenCalledTimes(1)
+ expect(host.querySelector('.settings-heading img')).not.toBeNull()
+ expect(host.textContent).toContain('Profil berhasil disimpan')
+ expect(host.textContent).not.toContain('Ada perubahan profil yang belum disimpan')
+ expect(host.querySelector<HTMLInputElement>('#settings-name')?.value).toBe(identity.profile.display_name)
+})
+it('discards a pending photo when leaving is confirmed without uploading',async()=>{
+ avatarEnvironment()
+ const host=await render()
+ await choosePhoto(host)
+ await click(button(host,'Keamanan Akun'))
+ expect(document.querySelector('dialog')?.textContent).toContain('Perubahan belum disimpan')
+ await click(button(document,'Batal'))
+ expect(host.querySelector('.settings-avatar-large img')).not.toBeNull()
+ await click(button(host,'Keamanan Akun')); await click(button(document,'Ya, tinggalkan'))
+ expect(mock.upload).not.toHaveBeenCalled()
+ expect(URL.revokeObjectURL).toHaveBeenCalled()
+})
+it('defers avatar deletion until the profile is saved',async()=>{
+ avatarEnvironment(true)
+ const host=await render()
+ await click(button(host,'Hapus foto')); await click(button(document,'Ya, hapus foto'))
+ expect(mock.remove).not.toHaveBeenCalled()
+ expect(host.querySelector('.settings-avatar-large img')).toBeNull()
+ await submitProfile(host)
+ expect(mock.remove).toHaveBeenCalledWith([`${identity.id}/avatar.jpg`])
+})
+it('keeps the pending photo when storage rejects saving and allows retry',async()=>{
+ avatarEnvironment()
+ const host=await render()
+ await choosePhoto(host)
+ mock.upload.mockResolvedValueOnce({data:null,error:{message:'denied'}})
+ await submitProfile(host)
+ expect(host.textContent).not.toContain('Profil berhasil disimpan')
+ expect(host.querySelector('.settings-avatar-large img')).not.toBeNull()
+ expect(host.textContent).toContain('belum disimpan')
+ await submitProfile(host)
+ expect(mock.upload).toHaveBeenCalledTimes(2)
+ expect(host.textContent).toContain('Profil berhasil disimpan')
+})
+
+it('does not upload the pending photo when saving the name fails',async()=>{
+ avatarEnvironment()
+ const host=await render()
+ await choosePhoto(host)
+ await input(host.querySelector('#settings-name')!,'Nama Baru')
+ mock.request.mockRejectedValueOnce(new Error('Nama belum tersimpan.'))
+ await submitProfile(host)
+ expect(mock.upload).not.toHaveBeenCalled()
+ expect(host.querySelector('.settings-avatar-large img')).not.toBeNull()
+ expect(host.textContent).toContain('Ada perubahan profil yang belum disimpan')
+})
+
+it('reports a partial save honestly and retries only the photo after the name was saved',async()=>{
+ avatarEnvironment()
+ const host=await render()
+ await choosePhoto(host)
+ await input(host.querySelector('#settings-name')!,'Nama Baru')
+ mock.request.mockResolvedValueOnce({id:identity.id,display_name:'Nama Baru'})
+ mock.upload.mockResolvedValueOnce({data:null,error:{message:'network error'}})
+ await submitProfile(host)
+ expect(host.querySelector('[role=alert]')?.textContent).toContain('Nama tampilan sudah tersimpan, tetapi perubahan foto belum tersimpan')
+ expect(host.textContent).not.toContain('Profil berhasil disimpan')
+ await submitProfile(host)
+ expect(mock.request).toHaveBeenCalledTimes(1)
+ expect(mock.upload).toHaveBeenCalledTimes(2)
+ expect(host.textContent).toContain('Profil berhasil disimpan')
+})
+
+it('blocks Back with a pending photo, preserves it on cancel and discards it before Forward',async()=>{
+ avatarEnvironment()
+ const host=await render()
+ await act(async()=>{await testRouter.navigate('/settings?section=security')})
+ await act(async()=>{await testRouter.navigate('/settings')})
+ await choosePhoto(host)
+ const preview=host.querySelector('.settings-avatar-large img')!.getAttribute('src')
+ await act(async()=>{await testRouter.navigate(-1)})
+ expect(document.querySelector('dialog')?.textContent).toContain('Perubahan belum disimpan')
+ await click(button(document,'Batal'))
+ expect(host.querySelector('.settings-avatar-large img')?.getAttribute('src')).toBe(preview)
+ await act(async()=>{await testRouter.navigate(-1)})
+ await click(button(document,'Ya, tinggalkan'))
+ expect(host.querySelector('h2')?.textContent).toBe('Jaga akses tetap milikmu.')
+ await act(async()=>{await testRouter.navigate(1)})
+ expect(host.querySelector('.settings-avatar-large img')).toBeNull()
+ expect(URL.revokeObjectURL).toHaveBeenCalledWith(preview)
+ expect(mock.upload).not.toHaveBeenCalled()
 })

@@ -3,12 +3,16 @@ import assert from 'node:assert/strict'
 import { createElement } from 'react'
 import { renderToPipeableStream } from 'react-dom/server'
 import { PassThrough } from 'node:stream'
-import { MemoryRouter } from 'react-router'
+import { createMemoryRouter, RouterProvider } from 'react-router'
 import { createServer } from 'vite'
 
 // SSR structure fixtures use original content; live CMS is verified separately.
 process.env.VITE_EDUCATION_SOURCE = 'local'
 const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' })
+// Match the application's data-router context, including Settings useBlocker.
+function FixtureRouter({children,initialEntries}) {
+  return createElement(RouterProvider,{router:createMemoryRouter([{path:'*',element:children}],{initialEntries})})
+}
 async function renderPage(element) {
   return new Promise((resolve,reject)=>{
     const stream=new PassThrough();let html=''
@@ -26,7 +30,7 @@ try {
   assert.deepEqual(placeholderRoutes.map(({ path }) => path), expectedPaths)
   const adminPaths = [{path:'/admin/dashboard',title:'Kendali yang terukur.'},{path:'/admin/feedback',title:'Dengarkan. Tinjau. Tindak lanjuti.'},{path:'/admin/domains',title:'Referensi, dengan bukti.'},{path:'/admin/articles',title:'Pengetahuan yang bisa dipercaya.'},{path:'/admin/audit',title:'Setiap perubahan, tercatat.'}]
   await runSequentially(adminPaths,async ({path,title})=>{
-    const html=await renderPage(createElement(AuthContext.Provider,{value:{loading:false,identity:fixtureIdentity,error:'',refresh:async()=>fixtureIdentity}},createElement(MemoryRouter,{initialEntries:[path]},createElement(AppRoutes))))
+    const html=await renderPage(createElement(AuthContext.Provider,{value:{loading:false,identity:fixtureIdentity,error:'',refresh:async()=>fixtureIdentity}},createElement(FixtureRouter,{initialEntries:[path]},createElement(AppRoutes))))
     assert.ok(html.includes(title)&&html.includes('admin-shell'),`Missing admin workspace: ${path}`)
     assert.equal((html.match(/<h1[\s>]/g)??[]).length,1)
     assert.ok(!html.includes('floating-header')&&!html.includes('<video'),'Admin must use its own layout')
@@ -35,7 +39,7 @@ try {
   await runSequentially([{ path: '/', title: 'Jangan asal klik.' }, { path: '/dashboard', title: 'Selamat datang kembali' }, { path: '/feedback', title: 'Ada yang perlu' }, {path:'/education',title:'Kenali modusnya.'}, {path:'/education/phishing',title:'Cermati link, bukan hanya tampilannya.'}, {path:'/education/tidak-ada',title:'Artikel tidak ditemukan.'}, { path: '/history', title: 'Riwayat Pemeriksaanmu.' }, { path: '/history/tidak-valid', title: 'Detail Hasil Pemeriksaan' }, ...['link', 'message', 'website', 'qr', 'media'].map(mode => ({ path: `/scan/${mode}`, title: 'Periksa konten mencurigakan.' })), ...placeholderRoutes, { path: '/tidak-ada', title: 'Halaman tidak ditemukan' }], async ({ path, title }) => {
     // The root now redirects verified accounts; render its public content as a guest.
     const pageIdentity = path === '/' ? null : fixtureIdentity
-    const html = await renderPage(createElement(AuthContext.Provider, { value: { loading: false, identity: pageIdentity, error: '', refresh: async () => pageIdentity } }, createElement(MemoryRouter, { initialEntries: [path] }, createElement(AppRoutes))))
+    const html = await renderPage(createElement(AuthContext.Provider, { value: { loading: false, identity: pageIdentity, error: '', refresh: async () => pageIdentity } }, createElement(FixtureRouter, { initialEntries: [path] }, createElement(AppRoutes))))
     assert.ok(html.includes(title), `Missing title: ${path}`)
     assert.equal((html.match(/<h1[\s>]/g) ?? []).length, 1, `Expected one h1: ${path}`)
     assert.ok(html.includes('<main') && html.includes('<footer'), `Missing layout: ${path}`)
@@ -65,7 +69,7 @@ try {
     { path: '/reset-password', title: 'Buat Kata Sandi Baru' },
   ]
   await runSequentially(authRoutes, async ({ path, title }) => {
-    const html = await renderPage(createElement(MemoryRouter, { initialEntries: [path] }, createElement(AppRoutes)))
+    const html = await renderPage(createElement(FixtureRouter, { initialEntries: [path] }, createElement(AppRoutes)))
     assert.ok(html.includes(title) && html.includes('auth-root'), `Missing auth page: ${path}`)
     assert.equal((html.match(/<h1[\s>]/g)??[]).length,1,`Expected one accessible auth h1: ${path}`)
     assert.ok(html.includes('<main'),`Missing auth main landmark: ${path}`)
@@ -108,7 +112,7 @@ try {
   console.log('PASS shared email validation, whitespace, duplicate separators and length boundaries')
   const { emptyFeedback, feedbackCategories, feedbackFields, validateFeedback, readFeedbackEntry } = await server.ssrLoadModule('/src/features/feedback/feedbackModel.ts')
   await runSequentially(feedbackCategories, async ({ id }) => {
-    const categoryHtml = await renderPage(createElement(MemoryRouter, { initialEntries: [{ pathname: '/feedback', state: { feedbackCategory: id } }] }, createElement(AppRoutes)))
+    const categoryHtml = await renderPage(createElement(FixtureRouter, { initialEntries: [{ pathname: '/feedback', state: { feedbackCategory: id } }] }, createElement(AppRoutes)))
     const ids = [...categoryHtml.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1])
     assert.equal(new Set(ids).size, ids.length, `Duplicate IDs in feedback category: ${id}`)
     assert.ok(categoryHtml.includes('<form'), `Missing dynamic feedback form: ${id}`)

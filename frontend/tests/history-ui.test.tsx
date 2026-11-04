@@ -38,6 +38,17 @@ async function click(element: Element) { await act(async () => { element.dispatc
 function button(text: string, parent: ParentNode = document): Element { return [...parent.querySelectorAll('button')].find(element => element.textContent?.includes(text))! }
 
 describe('account history UI', () => {
+  it('keeps development examples labelled and separate from actionable account records', async () => {
+    const {host}=await render(<ScanHistoryPage />)
+    const examples=host.querySelector('.history-dummy')!
+    expect(examples.textContent).toContain('simulasi, bukan hasil analisis')
+    expect(examples.querySelectorAll('li')).toHaveLength(2)
+    expect(examples.querySelector('a,button')).toBeNull()
+    expect(host.querySelector('.history-list-toolbar')).toBeNull()
+    expect(host.textContent).toContain('Belum ada pemeriksaan tersimpan.')
+    expect(api.getReport).not.toHaveBeenCalled()
+    expect(api.deleteHistory).not.toHaveBeenCalled()
+  })
   it('distinguishes empty history, filtering and server failure', async () => {
     const { host } = await render(<ScanHistoryPage />)
     expect(host.textContent).toContain('Belum ada pemeriksaan tersimpan.')
