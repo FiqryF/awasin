@@ -75,7 +75,11 @@ export function ResetPasswordPage() {
     if (!confirm) errs.confirm = 'Konfirmasi kata sandi wajib diisi.'
     else if (confirm !== password) errs.confirm = 'Kata sandi tidak cocok.'
     setErrors(errs)
-    if (Object.keys(errs).length > 0 || !ready || loading || done) return
+    if (Object.keys(errs).length > 0) {
+      document.getElementById(errs.password ? 'reset-password' : 'reset-confirm')?.focus()
+      return
+    }
+    if (!ready || loading || done) return
     setLoading(true); setFailed(false)
     try {
       const client = requireSupabase()

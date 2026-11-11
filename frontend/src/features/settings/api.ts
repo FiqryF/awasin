@@ -8,7 +8,9 @@ function responseError(path: string, status: number) {
     if (status === 422) return 'Periksa format, panjang isian, bukti, dan transisi status. Perubahan belum tersimpan.'
   }
   if (status === 401) return 'Sesi berakhir. Silakan masuk kembali.'
-  if (status === 413) return 'Ekspor melebihi batas 500 laporan atau 500 masukan. Ekspor tidak dibuat; hubungi pengelola untuk ekspor berukuran besar.'
+  if (status === 413) return path === '/account/export'
+    ? 'Ekspor melebihi batas 500 laporan atau 500 masukan. Ekspor tidak dibuat; hubungi pengelola untuk ekspor berukuran besar.'
+    : 'Ukuran permintaan terlalu besar. Kurangi isian lalu coba lagi.'
   return 'Perubahan belum dapat diproses. Layanan mungkin sedang tidak tersedia.'
 }
 export async function accountRequest(path: string, method = 'GET', payload?: unknown, signal?: AbortSignal, owner?: string): Promise<unknown> {
@@ -31,3 +33,13 @@ export function parsePreferences(value: unknown): Preferences {
 }
 export async function getPreferences(signal?: AbortSignal, owner?: string) { return parsePreferences(await accountRequest('/account/preferences', 'GET', undefined, signal, owner)) }
 export async function savePreferences(value: Preferences, owner?: string) { return parsePreferences(await accountRequest('/account/preferences', 'PATCH', value, undefined, owner)) }
+
+export async function accountExport(owner: string, signal: AbortSignal): Promise<Blob> {
+  const value = await accountRequest('/account/export', 'GET', undefined, signal, owner)
+  const { data, error } = await requireSupabase().auth.getSession()
+  if (signal.aborted || error || data.session?.user.id !== owner) throw new Error('Akun aktif telah berubah. Ekspor dibatalkan.')
+  if (!value || typeof value !== 'object' || !('format_version' in value) || value.format_version !== 2
+      || !('profile' in value) || !value.profile || typeof value.profile !== 'object'
+      || !('id' in value.profile) || value.profile.id !== owner) throw new Error('Respons ekspor tidak valid.')
+  return new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' })
+}

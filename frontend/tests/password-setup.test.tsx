@@ -41,6 +41,15 @@ async function submitPassword(host: HTMLElement) {
   await act(async () => host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
 }
 
+it('focuses the first invalid password before attempting an update', async () => {
+  rememberPasswordSetup(user.id)
+  const host = await page()
+  await act(async () => host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+  expect(document.activeElement?.id).toBe('reset-password')
+  expect(host.querySelector('#reset-password')?.getAttribute('aria-invalid')).toBe('true')
+  expect(mock.updateUser).not.toHaveBeenCalled()
+})
+
 it('restores verified setup after refresh and refuses expired or different-user progress', async () => {
   rememberPasswordSetup(user.id)
   const host = await page()

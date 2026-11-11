@@ -63,7 +63,10 @@ export function LoginPage() {
     e.preventDefault()
     const errs = validate(email, password)
     setErrors(errs)
-    if (Object.keys(errs).length > 0) return
+    if (Object.keys(errs).length > 0) {
+      document.getElementById(errs.email ? 'login-email' : 'login-password')?.focus()
+      return
+    }
 
     if (loading) return
     setLoading(true)

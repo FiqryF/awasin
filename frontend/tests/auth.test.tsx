@@ -11,6 +11,7 @@ import { AuthProvider } from '../src/features/auth/AuthProvider'
 import { fetchIdentity } from '../src/features/auth/identity'
 import { useAuth } from '../src/features/auth/useAuth'
 import { LoginPage } from '../src/pages/auth/LoginPage'
+import { ForgotPasswordPage } from '../src/pages/auth/ForgotPasswordPage'
 import { RegisterPage } from '../src/pages/auth/RegisterPage'
 import { VerifyEmailPage } from '../src/pages/auth/VerifyEmailPage'
 
@@ -49,6 +50,41 @@ async function render(element: React.ReactNode) {
   await act(async () => root.render(element))
   return container
 }
+
+it('focuses the first invalid login input without calling authentication',async()=>{
+  const host=await render(<AuthContext.Provider value={{identity:null,loading:false,error:'',refresh:async()=>null}}><MemoryRouter><LoginPage/></MemoryRouter></AuthContext.Provider>)
+  await act(async()=>host.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})))
+  expect(document.activeElement?.id).toBe('login-email')
+  expect(host.querySelector('#login-email')?.getAttribute('aria-invalid')).toBe('true')
+})
+
+it.each(['', 'invalid-email'])('focuses an invalid recovery email (%s) and exposes its error', async (value) => {
+  const host = await render(<MemoryRouter><ForgotPasswordPage /></MemoryRouter>)
+  const input = host.querySelector<HTMLInputElement>('#forgot-email')!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await act(async () => host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+  expect(document.activeElement).toBe(input)
+  expect(input.getAttribute('aria-invalid')).toBe('true')
+  expect(input.getAttribute('aria-describedby')).toBe('forgot-email-error')
+})
+
+it.each([
+  ['', 'reg-fullname'],
+  ['Synthetic QA', 'reg-email'],
+])('focuses an invalid registration field after name "%s"', async (name, expected) => {
+  const host = await render(<AuthContext.Provider value={{ identity: null, loading: false, error: '', refresh: async () => null }}><MemoryRouter><RegisterPage /></MemoryRouter></AuthContext.Provider>)
+  const input = host.querySelector<HTMLInputElement>('#reg-fullname')!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, name)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await act(async () => host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+  expect(document.activeElement?.id).toBe(expected)
+  expect(host.querySelector('#reg-agree')?.getAttribute('aria-invalid')).toBe('true')
+})
 
 function fakeClient() {
   const user = { id: verified.id, email_confirmed_at: '2026-10-29', is_anonymous: false }

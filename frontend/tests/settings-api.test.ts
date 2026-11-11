@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { accountRequest, parsePreferences, savePreferences } from '../src/features/settings/api'
+import { accountExport, accountRequest, parsePreferences, savePreferences } from '../src/features/settings/api'
 
 const mock=vi.hoisted(()=>({session:vi.fn()}))
 vi.mock('../src/features/auth/client',()=>({requireSupabase:()=>({auth:{getSession:mock.session}})}))
@@ -24,4 +24,30 @@ it('reports service failure instead of inventing a saved preference',async()=>{
  vi.stubGlobal('fetch',vi.fn(async()=>new Response('private SQL error',{status:503})))
  await expect(savePreferences({history_retention:'manual',animation:'system'},'owner-a')).rejects.not.toThrow('private SQL')
  expect(()=>parsePreferences({history_retention:'automatic',animation:'system'})).toThrow()
+})
+it('exports only a response matching the still-active owner',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async()=>Response.json({format_version:2,profile:{id:'owner-a'},saved_reports:[],feedback:[]})))
+ const blob=await accountExport('owner-a',new AbortController().signal)
+ expect(blob.type).toBe('application/json')
+ expect(blob.size).toBeGreaterThan(0)
+})
+it('rejects an export response for another owner',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async()=>Response.json({format_version:2,profile:{id:'owner-b'}})))
+ await expect(accountExport('owner-a',new AbortController().signal)).rejects.toThrow('tidak valid')
+})
+it('rejects account switching while export is in flight',async()=>{
+ mock.session.mockResolvedValueOnce({data:{session:{access_token:'fixture-token',user:{id:'owner-a'}}},error:null})
+ mock.session.mockResolvedValueOnce({data:{session:{user:{id:'owner-b'}}},error:null})
+ vi.stubGlobal('fetch',vi.fn(async()=>Response.json({format_version:2,profile:{id:'owner-a'}})))
+ await expect(accountExport('owner-a',new AbortController().signal)).rejects.toThrow('dibatalkan')
+})
+it('does not export after its page request was aborted',async()=>{
+ const controller=new AbortController()
+ vi.stubGlobal('fetch',vi.fn(async()=>{controller.abort();return Response.json({format_version:2,profile:{id:'owner-a'}})}))
+ await expect(accountExport('owner-a',controller.signal)).rejects.toThrow('dibatalkan')
+})
+it('distinguishes oversized writes from the export record limit',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async()=>new Response('',{status:413})))
+ await expect(accountRequest('/admin/articles','POST',{})).rejects.toThrow('Ukuran permintaan')
+ await expect(accountRequest('/account/export')).rejects.toThrow('500 laporan')
 })

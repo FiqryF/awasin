@@ -4,7 +4,7 @@ import { LogOut, ShieldCheck, UserRound, LockKeyhole, SlidersHorizontal, Chevron
 import { useAuth } from '../features/auth/useAuth'
 import type { Identity } from '../features/auth/identity'
 import { usePreferences } from '../features/settings/context'
-import { accountRequest, type Preferences } from '../features/settings/api'
+import { accountExport, accountRequest, type Preferences } from '../features/settings/api'
 import { changeAccountPassword } from '../features/settings/changePassword'
 import { useLogout } from '../features/auth/useLogout'
 import { FormField } from '../components/auth/FormField'
@@ -193,9 +193,32 @@ function PreferenceEditor({kind}:Readonly<{kind:'history'|'animation'}>) {
   return <div className="settings-preference"><label htmlFor={`settings-${kind}`}>{history?'Penyimpanan laporan baru':'Gerakan dan animasi'}</label><select id={`settings-${kind}`} disabled={busy} value={history?value.history_retention:value.animation} onChange={event=>void save(history?{...value,history_retention:event.target.value as Preferences['history_retention']}:{...value,animation:event.target.value as Preferences['animation']})}>{history?<><option value="manual">Izinkan simpan secara manual</option><option value="disabled">Nonaktifkan penyimpanan baru</option></>:<><option value="system">Ikuti sistem</option><option value="reduced">Kurangi animasi</option></>}</select>{busy&&<output>Menyimpan pilihan…</output>}{error&&<p role="alert">{error}</p>}{message&&<output>{message}</output>}</div>
 }
 
+function AccountExport() {
+  const {identity}=useAuth()
+  const [busy,setBusy]=useState(false),[error,setError]=useState('')
+  const request=useRef<AbortController|null>(null)
+  useEffect(()=>()=>request.current?.abort(),[])
+  async function download(){
+    if(busy||!identity)return
+    const controller=new AbortController()
+    request.current=controller
+    setBusy(true);setError('')
+    try{
+      const blob=await accountExport(identity.id,controller.signal)
+      if(controller.signal.aborted)return
+      const url=URL.createObjectURL(blob)
+      const link=document.createElement('a')
+      link.href=url;link.download='awasin-data.json'
+      try{document.body.append(link);link.click()}
+      finally{link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+    }catch(error){if(!controller.signal.aborted)setError(errorMessage(error))}
+    finally{if(!controller.signal.aborted)setBusy(false)}
+  }
+  return <div className="settings-data-row"><div><h3>Unduh data akun</h3><p>Unduh profil, preferensi, laporan tersimpan, dan Feedback milikmu. Foto profil, file unggahan, dan kredensial autentikasi tidak disertakan.</p>{error&&<p role="alert">{error}</p>}</div><button type="button" className="button history-secondary" disabled={busy} onClick={()=>void download()}>{busy?'Menyiapkan ekspor…':'Unduh data akun'}</button></div>
+}
 function PrivacySettings() {
   const [deleting,setDeleting]=useState(false),[message,setMessage]=useState('')
-  return <><div className="settings-intro"><h2>Datamu, pilihanmu.</h2><p>Tentukan apakah laporan baru boleh disimpan. Pilihan ini tidak menghapus laporan yang sudah ada dan tidak pernah mengaktifkan simpan otomatis.</p></div><PreferenceEditor kind="history"/><div className="settings-data-row"><div><h3>Yang disimpan di akun</h3><p>Nama tampilan, email autentikasi, preferensi, serta ringkasan aman dan hasil analisis yang kamu pilih untuk disimpan. Pesan mentah, file media, screenshot, kata sandi, OTP, dan token bukan bagian dari riwayat.</p><p>Draf Feedback berada di memori halaman. Setelah dikirim dengan persetujuan dan dikonfirmasi layanan, teks serta referensi pilihan disimpan terpisah; menghapus riwayat tidak menghapus Feedback. Data teknis autentikasi dikelola penyedia akun.</p></div></div>{message&&<output className="settings-feedback">{message}</output>}<div className="settings-data-row"><div><h3>Hapus seluruh riwayat</h3><p>Hapus permanen laporan tersimpan milik akun ini. Profil dan preferensi tidak ikut dihapus. Tidak ada file unggahan yang disimpan oleh fitur scan saat ini.</p></div><button type="button" className="button history-secondary" onClick={()=>setDeleting(true)}>Hapus riwayat</button></div><div className="settings-danger"><h3>Hapus Akun Saya</h3><p>Belum tersedia. Penghapusan harus mencakup identitas autentikasi, profil, preferensi, dan laporan terkait melalui layanan tepercaya dengan verifikasi ulang. Menghapus profil saja tidak menutup akun.</p><button type="button" className="button history-secondary" disabled>Penghapusan akun belum tersedia</button></div>{deleting&&<DeleteHistoryDialog onClose={()=>setDeleting(false)} onDeleted={count=>{setDeleting(false);setMessage(`${count} laporan berhasil dihapus.`)}}/>}</>
+  return <><div className="settings-intro"><h2>Datamu, pilihanmu.</h2><p>Tentukan apakah laporan baru boleh disimpan. Pilihan ini tidak menghapus laporan yang sudah ada dan tidak pernah mengaktifkan simpan otomatis.</p></div><PreferenceEditor kind="history"/><AccountExport/><div className="settings-data-row"><div><h3>Yang disimpan di akun</h3><p>Nama tampilan, email autentikasi, preferensi, serta ringkasan aman dan hasil analisis yang kamu pilih untuk disimpan. Pesan mentah, file media, screenshot, kata sandi, OTP, dan token bukan bagian dari riwayat.</p><p>Draf Feedback berada di memori halaman. Setelah dikirim dengan persetujuan dan dikonfirmasi layanan, teks serta referensi pilihan disimpan terpisah; menghapus riwayat tidak menghapus Feedback. Data teknis autentikasi dikelola penyedia akun.</p></div></div>{message&&<output className="settings-feedback">{message}</output>}<div className="settings-data-row"><div><h3>Hapus seluruh riwayat</h3><p>Hapus permanen laporan tersimpan milik akun ini. Profil dan preferensi tidak ikut dihapus. Tidak ada file unggahan yang disimpan oleh fitur scan saat ini.</p></div><button type="button" className="button history-secondary" onClick={()=>setDeleting(true)}>Hapus riwayat</button></div><div className="settings-danger"><h3>Hapus Akun Saya</h3><p>Belum tersedia. Penghapusan harus mencakup identitas autentikasi, profil, preferensi, dan laporan terkait melalui layanan tepercaya dengan verifikasi ulang. Menghapus profil saja tidak menutup akun.</p><button type="button" className="button history-secondary" disabled>Penghapusan akun belum tersedia</button></div>{deleting&&<DeleteHistoryDialog onClose={()=>setDeleting(false)} onDeleted={count=>{setDeleting(false);setMessage(`${count} laporan berhasil dihapus.`)}}/>}</>
 }
 
 function PreferenceSettings() {

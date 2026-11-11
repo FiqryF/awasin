@@ -72,7 +72,12 @@ export function RegisterPage() {
     e.preventDefault()
     const errs = validate(fullName, email, password, confirm, agreed)
     setErrors(errs)
-    if (Object.keys(errs).length > 0) return
+    const invalidFields = Object.keys(errs) as (keyof typeof errs)[]
+    if (invalidFields.length > 0) {
+      const inputIds = { fullName: 'reg-fullname', email: 'reg-email', password: 'reg-password', confirm: 'reg-confirm', agreed: 'reg-agree' }
+      document.getElementById(inputIds[invalidFields[0]])?.focus()
+      return
+    }
 
     if (loading) return
     setLoading(true)
@@ -150,6 +155,7 @@ export function RegisterPage() {
                 className="auth-agree-check"
                 checked={agreed}
                 aria-labelledby="reg-agree-label"
+                aria-invalid={errors.agreed ? 'true' : undefined}
                 onChange={(e) => setAgreed(e.target.checked)}
                 aria-describedby={errors.agreed ? 'reg-agree-error' : undefined}
               />

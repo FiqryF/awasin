@@ -35,8 +35,11 @@ export function ForgotPasswordPage() {
 
   async function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
-    if (!email.trim()) { setEmailError('Email wajib diisi.'); return }
-    if (!isValidEmail(email)) { setEmailError('Format email tidak valid.'); return }
+    if (!email.trim() || !isValidEmail(email)) {
+      setEmailError(email.trim() ? 'Format email tidak valid.' : 'Email wajib diisi.')
+      document.getElementById('forgot-email')?.focus()
+      return
+    }
     setEmailError('')
     if (loading) return
     setLoading(true)
