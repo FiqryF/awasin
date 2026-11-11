@@ -14,6 +14,7 @@ from app.core.logging import configure_logging
 from app.modules.health.router import APP_VERSION, router as health_router
 from app.modules.identity.service import IdentityService
 from app.modules.feedback.router import FeedbackLimiter
+from app.modules.analysis.orchestrator import AnalysisOrchestrator
 from app.core.body_limit import RequestBodyLimit
 
 
@@ -26,12 +27,13 @@ def create_app(settings: Settings | None = None) -> ASGIApp:
         async with httpx.AsyncClient(timeout=5, follow_redirects=False, trust_env=False) as client:
             api.state.identity = IdentityService(settings, client)
             api.state.feedback_limiter = FeedbackLimiter()
+            api.state.analysis = AnalysisOrchestrator()
             yield
 
     api = FastAPI(
         title=settings.app_name,
         version=APP_VERSION,
-        description="AWASIN account, consent-based history and feedback API. Analysis engines are not implemented.",
+        description="AWASIN account, history, feedback and shared security analysis API.",
         lifespan=lifespan,
         # Never let Starlette's traceback response bypass the safe error contract.
         debug=False,

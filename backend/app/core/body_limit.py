@@ -10,7 +10,12 @@ class RequestBodyLimit:
         if (scope['type'] != 'http' or not scope['path'].startswith(self.prefix + '/')
                 or scope['method'] not in {'POST', 'PATCH', 'PUT', 'DELETE'}):
             return await self.app(scope, receive, send)
-        limit = 32768 if scope['path'].rstrip('/') == self.prefix + '/feedback' else 262144
+        path = scope['path'].rstrip('/')
+        # The analysis media handler streams with a mode-specific cap and admission limit.
+        media_path = self.prefix + '/analysis/media/'
+        if scope['method'] == 'POST' and path.startswith(media_path) and path[len(media_path):] in {'message', 'qr', 'image', 'video'}:
+            return await self.app(scope, receive, send)
+        limit = 32768 if path == self.prefix + '/feedback' else 262144
         chunks, size = [], 0
         while True:
             message = await receive()
