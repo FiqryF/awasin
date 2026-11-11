@@ -5,7 +5,12 @@ import { clearPasswordSetup } from './passwordSetup'
 import { clearSessionNotice, setSessionNotice } from './sessionActivity'
 
 export const loginFailure = 'Tidak dapat masuk. Periksa email dan kata sandi Anda.'
+const rateLimitMessage = 'Terlalu banyak percobaan. Tunggu beberapa saat lalu coba lagi.'
 export class PasswordAlreadySetError extends Error {}
+
+function isRequestRateLimited(error: { status?: number; code?: string } | null) {
+  return error?.code === 'over_request_rate_limit' || (error?.status === 429 && !error.code)
+}
 
 export function createAuthActions(client: SupabaseClient, origin: string) {
   const callback = (path: string) => new URL(path, origin).href
@@ -15,6 +20,7 @@ export function createAuthActions(client: SupabaseClient, origin: string) {
         throw new Error('Periksa data pendaftaran dan konfirmasi kata sandi.')
       }
       const { data, error } = await client.auth.signUp({ email: email.trim(), password, options: { data: { display_name: name.trim() } } })
+      if (isRequestRateLimited(error)) throw new Error(rateLimitMessage)
       // A provider session is necessary; protected access still requires backend identity validation.
       if (error || !data.session?.access_token || !data.user?.id || data.user.is_anonymous || data.session.user?.id !== data.user.id) {
         throw new Error('Pendaftaran belum dapat diselesaikan. Coba masuk dengan akun Anda atau coba lagi nanti.')
@@ -24,6 +30,7 @@ export function createAuthActions(client: SupabaseClient, origin: string) {
     },
     async login(email: string, password: string) {
       const { data, error } = await client.auth.signInWithPassword({ email: email.trim(), password })
+      if (isRequestRateLimited(error)) throw new Error(rateLimitMessage)
       if (error && (error.status === 0 || error.name === 'AuthRetryableFetchError')) throw new Error('Layanan login tidak dapat dihubungi. Periksa koneksi lalu coba lagi; tidak perlu mereset kata sandi.')
       if (error || !data.session || !data.user.email_confirmed_at) throw new Error(loginFailure)
       clearSessionNotice()

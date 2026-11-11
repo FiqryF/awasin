@@ -114,7 +114,7 @@ describe('account actions using mocked Supabase SDK', () => {
     await expect(actions.register(email, password, confirm, 'Person')).rejects.toThrow()
     expect(auth.signUp).not.toHaveBeenCalled()
   })
-  it.each([null, { code: 'user_already_exists' }, { code: 'email_exists' }, { code: 'unexpected_failure' }])('does not claim signup succeeded without a session (%j)', async error => {
+  it.each([null, { code: 'user_already_exists' }, { code: 'email_exists' }, { code: 'unexpected_failure' }, { code: 'over_email_send_rate_limit', status: 429 }])('does not claim signup succeeded without a session (%j)', async error => {
     const { actions, auth } = fakeClient()
     auth.signUp.mockResolvedValue({ data: { session: null }, error } as never)
     await expect(actions.register('person@example.invalid', 'long passphrase test', 'long passphrase test', 'Person')).rejects.toThrow('Pendaftaran belum dapat diselesaikan.')
@@ -134,6 +134,28 @@ describe('account actions using mocked Supabase SDK', () => {
     for (const code of ['invalid_credentials', 'email_not_confirmed']) {
       auth.signInWithPassword.mockResolvedValue({ data: { session: null, user: null }, error: { code } } as never)
       await expect(actions.login('person@example.invalid', 'wrong input')).rejects.toThrow(loginFailure)
+    }
+  })
+  it.each(['login', 'signup'] as const)('tells users to wait when %s is rate limited', async (flow) => {
+    const { actions, auth } = fakeClient()
+    const failure = { data: { session: null, user: null }, error: { status: 429, message: 'private provider detail' } }
+    const email = 'person@example.invalid'
+    const password = 'long passphrase test'
+    if (flow === 'login') {
+      auth.signInWithPassword.mockResolvedValueOnce(failure as never)
+      await expect(actions.login(email, password)).rejects.toThrow(/^Terlalu banyak percobaan\. Tunggu beberapa saat lalu coba lagi\.$/)
+      expect(auth.signInWithPassword).toHaveBeenCalledTimes(1)
+    } else {
+      auth.signUp.mockResolvedValueOnce(failure as never)
+      await expect(actions.register(email, password, password, 'Person')).rejects.toThrow(/^Terlalu banyak percobaan\. Tunggu beberapa saat lalu coba lagi\.$/)
+      expect(auth.signUp).toHaveBeenCalledTimes(1)
+    }
+  })
+  it('keeps recovery provider errors generic, including account-specific email limits', async () => {
+    const { actions, auth } = fakeClient()
+    for (const error of [{ code: 'user_not_found', status: 404 }, { code: 'over_email_send_rate_limit', status: 429 }]) {
+      auth.resetPasswordForEmail.mockResolvedValueOnce({ error } as never)
+      await expect(actions.forgot('person@example.invalid')).rejects.toThrow(/^Permintaan belum dapat diproses\. Coba lagi nanti\.$/)
     }
   })
   it('uses recovery redirect, reauthentication nonce and current-device logout', async () => {
