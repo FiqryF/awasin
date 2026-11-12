@@ -9,9 +9,9 @@ export function ScanSidebar() {
         <ol className="scan-steps">
           <li><span aria-hidden="true">01</span>Pilih jenis pemeriksaan.</li>
           <li><span aria-hidden="true">02</span>Masukkan link, pesan, atau file.</li>
-          <li><span aria-hidden="true">03</span>Lihat bukti, indikasi risiko, dan saran setelah analisis tersedia.</li>
+          <li><span aria-hidden="true">03</span>Tinjau bukti, indikasi risiko, dan saran yang tersedia.</li>
         </ol>
-        <p className="sidebar-note">Saat ini, analisis keamanan belum tersedia.</p>
+        <p className="sidebar-note">Link &amp; Website sudah dapat diperiksa. Mode lain belum menghasilkan penilaian risiko.</p>
       </div>
       <div className="sidebar-panel">
         <div className="sidebar-label"><span className="section-label">KEAMANAN DATA</span><Fingerprint size={20} aria-hidden="true" /></div>

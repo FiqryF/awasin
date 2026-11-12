@@ -10,6 +10,7 @@ from anyio import CapacityLimiter
 from app.modules.history.schemas import ScanMode
 
 from .schemas import AnalysisResponse, EngineResult, ErrorCode, MediaMetadata
+from .url import UrlTarget
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -23,6 +24,9 @@ class AnalysisInput:
     qr_payload: str | None = None
     media: MediaMetadata | None = None
     media_stream: BinaryIO | None = None
+    url_target: UrlTarget | None = None
+    threat_lookup_consent: bool = False
+    enhanced_lookup_consent: bool = False
 
 
 class EngineAdapter(Protocol):
@@ -50,7 +54,10 @@ class AnalysisOrchestrator:
             "mode": request.mode,
             "media": request.media,
         }
-        adapter = self.adapters.get(request.mode)
+        if request.mode in {"link", "website"}:
+            adapter = self.adapters.get("link") or self.adapters.get("website")
+        else:
+            adapter = self.adapters.get(request.mode)
         if adapter is None:
             return AnalysisResponse(
                 **base, checked_at=datetime.now(UTC), status="unavailable", processing="unavailable",

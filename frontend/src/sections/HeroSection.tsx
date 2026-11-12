@@ -22,7 +22,7 @@ export function HeroSection({ personalized = false, displayName = '' }: Readonly
         <h1 id="home-title" className="hero-title">
           {personalized ? <><motion.span {...reveal(0.08)}>Selamat datang kembali{displayName ? ',' : '.'}</motion.span>{displayName && <motion.span {...reveal(0.17)} className="hero-title-second"><ShinyText>{displayName}.</ShinyText></motion.span>}</> : <><motion.span {...reveal(0.08)}>Jangan asal klik.</motion.span>{' '}<motion.span {...reveal(0.17)} className="hero-title-second"><ShinyText>Cek dulu di <span className="hero-wordmark">AWASIN.</span></ShinyText></motion.span></>}
         </h1>
-        <motion.div {...reveal(0.25)} className="hero-description"><p>{personalized ? 'Ruang pribadimu untuk memeriksa konten mencurigakan, meninjau riwayat pemeriksaan, dan meningkatkan keamanan aktivitas digital.' : 'Periksa indikasi penipuan dari link, pesan, website, QR Code, gambar, dan video. Mudah digunakan, dengan hasil yang jelas dan transparan.'}</p></motion.div>
+        <motion.div {...reveal(0.25)} className="hero-description"><p>{personalized ? 'Ruang pribadimu untuk memeriksa konten mencurigakan, meninjau riwayat pemeriksaan, dan meningkatkan keamanan aktivitas digital.' : 'Periksa link dan website, pesan, QR Code, serta keaslian gambar dan video dalam satu tempat.'}</p></motion.div>
         <motion.div {...reveal(0.34)} className="hero-actions">
           <a href="#periksa" className="button button-glass">Mulai Periksa <ArrowUpRight size={20} aria-hidden="true" /></a>{personalized ? <Link to="/history" className="button dashboard-history-action">Lihat Riwayat <ArrowUpRight size={18} aria-hidden="true" /></Link> : <span>Bisa dicoba tanpa login.</span>}
         </motion.div>

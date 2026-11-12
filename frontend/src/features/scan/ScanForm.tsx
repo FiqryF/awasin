@@ -4,11 +4,60 @@ import { ArrowUpRight, Info, LockKeyhole } from 'lucide-react'
 import { motion } from 'motion/react'
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion'
 import { FileUpload } from './FileUpload'
-import { validateFile, validateScanInput } from './scanConfig'
+import { hasHttpScheme, validateFile, validateScanInput } from './scanConfig'
 import type { ScanConfig } from './scanConfig'
 import { decodeQr, decodedHttpUrl } from './decodeQr'
-import { analysisErrorMessage, requestAnalysis } from './analysisApi'
-import type { AnalysisInput, AnalysisResult } from './analysisApi'
+import { analysisErrorMessage, requestAIExplanation, requestAnalysis } from './analysisApi'
+import type { AIState, AnalysisInput, AnalysisResult } from './analysisApi'
+import { UrlAnalysisReport } from './UrlAnalysisReport'
+
+const noConsent = { threat_lookup_consent: false, enhanced_lookup_consent: false, ai_consent: false }
+const fullConsent = { threat_lookup_consent: true, enhanced_lookup_consent: true, ai_consent: true }
+
+const consentOptions = [
+  { key: 'threat_lookup_consent', label: 'Daftar ancaman Google', detail: 'Safe Browsing menerima potongan hash dari alamat. Jika AWASIN memakai Web Risk, layanan itu menerima alamat yang dinormalisasi, termasuk path. Pemeriksaan Google dilewati jika alamat tidak diawali HTTP(S) atau berisi query.' },
+  { key: 'enhanced_lookup_consent', label: 'Layanan keamanan tambahan', detail: 'VirusTotal menerima alamat beranda yang memenuhi syarat dalam bentuk Base64, yaitu cara pengodean alamat. urlscan.io menerima domain terdaftar untuk mencari arsip publik. Google Public DNS dan RDAP juga menerima domain terdaftar. RDAP tersedia untuk .com dan .net. Pencarian arsip tidak memulai pemindaian baru.' },
+  { key: 'ai_consent', label: 'Penjelasan Mistral AI', detail: 'Mistral menerima hasil penilaian dan ringkasan bukti terpilih, seperti jenis temuan dan status sumber. Alamat URL, token, dan data akun tidak dikirim ke Mistral.' },
+] as const
+
+function ScanConsent({ value, onChange, detectorConsent, onDetectorConsent }: Readonly<{
+  value: typeof noConsent; onChange: (value: typeof noConsent) => void
+  detectorConsent: boolean; onDetectorConsent: (value: boolean) => void
+}>) {
+  const detectorProvider = import.meta.env.VITE_AI_THREAT_DETECTOR_PROVIDER?.trim()
+  const all = consentOptions.every(({ key }) => value[key])
+  const mixed = !all && consentOptions.some(({ key }) => value[key])
+  return <div className="scan-consent">
+    <label className="scan-lookup-consent">
+      <input type="checkbox" checked={all} ref={input => { if (input) input.indeterminate = mixed }}
+        aria-describedby="scan-consent-help" onChange={event => onChange(event.target.checked ? fullConsent : noConsent)} />
+      <span>Izinkan pemeriksaan lengkap</span>
+    </label>
+    <p className="input-help" id="scan-consent-help">Gunakan Google, layanan keamanan tambahan, dan Mistral AI. Tanpa izin, pemeriksaan hanya dilakukan oleh AWASIN.</p>
+    <details className="scan-consent-details">
+      <summary>Detail penggunaan data</summary>
+      <div className="scan-consent-options">
+        <p className="input-help">Kamu juga bisa memilih layanan satu per satu. Layanan yang tersedia hanya dijalankan jika alamat memenuhi syarat.</p>
+        {consentOptions.map(({ key, label, detail }) => <div key={key}>
+          <label className="scan-lookup-consent">
+            <input type="checkbox" checked={value[key]} aria-describedby={`scan-data-${key}`}
+              onChange={event => onChange({ ...value, [key]: event.target.checked })} />
+            <span>{label}</span>
+          </label>
+          <p className="input-help" id={`scan-data-${key}`}>{detail}</p>
+        </div>)}
+        {detectorProvider && <div>
+          <label className="scan-lookup-consent">
+            <input type="checkbox" checked={detectorConsent} aria-describedby="scan-detector-privacy"
+              onChange={event => onDetectorConsent(event.target.checked)} />
+            <span>Analisis karakteristik tautan dengan {detectorProvider}</span>
+          </label>
+          <p className="input-help" id="scan-detector-privacy">OpenRouter dan penyedia modelnya menerima kategori karakteristik alamat dan ringkasan bukti. URL lengkap dan nilai parameter tidak dikirim. Penyedia model gratis dapat menyimpan data untuk pelatihan. AWASIN tidak membuka situs yang diperiksa. Mistral hanya menjelaskan hasil.</p>
+        </div>}
+      </div>
+    </details>
+  </div>
+}
 
 export function ScanForm({ config, ownerId }: Readonly<{ config: ScanConfig; ownerId?: string }>) {
   const [text, setText] = useState('')
@@ -17,6 +66,9 @@ export function ScanForm({ config, ownerId }: Readonly<{ config: ScanConfig; own
   const [result, setResult] = useState<AnalysisResult | null>(null)
   const [requestError, setRequestError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [consent, setConsent] = useState(noConsent)
+  const [detectorConsent, setDetectorConsent] = useState(false)
+  const [ai, setAi] = useState<AIState | null>(null)
   const [decoded,setDecoded]=useState<string|null>(null)
   const [decoding,setDecoding]=useState(false)
   const generation=useRef(0)
@@ -27,7 +79,7 @@ export function ScanForm({ config, ownerId }: Readonly<{ config: ScanConfig; own
   }, [])
   const form = useRef<HTMLFormElement>(null)
   const reducedMotion = usePrefersReducedMotion()
-  const isUrl = config.id === 'link' || config.id === 'website'
+  const isUrl = config.id === 'link'
   let submitLabel = 'Periksa Sekarang'
   if (config.id === 'qr') submitLabel = 'Baca QR Code'
   if (decoding) submitLabel = 'Membaca QR…'
@@ -39,6 +91,7 @@ export function ScanForm({ config, ownerId }: Readonly<{ config: ScanConfig; own
     setSubmitting(false)
     setRequestError(null)
     setResult(null)
+    setAi(null)
   }
 
   async function analyze(input: AnalysisInput) {
@@ -48,7 +101,25 @@ export function ScanForm({ config, ownerId }: Readonly<{ config: ScanConfig; own
     setSubmitting(true)
     try {
       const next = await requestAnalysis(input, request.signal, ownerId)
-      if (!request.signal.aborted) setResult(next)
+      if (request.signal.aborted) return
+      const { ai: offer, ...deterministic } = next
+      setResult(deterministic)
+      setSubmitting(false)
+      if ('ai_consent' in input && input.ai_consent && next.url_report) {
+        if (offer?.status !== 'pending') {
+          setAi({ status: offer?.status ?? 'unavailable' })
+          return
+        }
+        setAi({ status: 'loading' })
+        try {
+          const explanation = await requestAIExplanation(offer.ticket, request.signal, ownerId)
+          if (!request.signal.aborted) setAi(explanation)
+        } catch (cause) {
+          if (!request.signal.aborted) {
+            setAi({ status: cause instanceof Error && cause.name === 'TimeoutError' ? 'timeout' : 'unavailable' })
+          }
+        }
+      }
     } catch (cause) {
       if (!request.signal.aborted) setRequestError(analysisErrorMessage(cause))
     } finally {
@@ -82,7 +153,17 @@ export function ScanForm({ config, ownerId }: Readonly<{ config: ScanConfig; own
     if(validationError)return
     const mode = config.id
     if (mode === 'qr' && file) await readQr(file)
-    else if (mode === 'link' || mode === 'website') await analyze({ mode, url: text })
+    else if (mode === 'link') {
+      setConsent(noConsent)
+      setDetectorConsent(false)
+      await analyze({
+        mode: hasHttpScheme(text) ? 'link' : 'website', url: text,
+        ...(consent.threat_lookup_consent ? { threat_lookup_consent: true } : {}),
+        ...(consent.enhanced_lookup_consent ? { enhanced_lookup_consent: true } : {}),
+        ...(consent.ai_consent ? { ai_consent: true } : {}),
+        ...(detectorConsent ? { detector_consent: true } : {}),
+      })
+    }
     else if (mode === 'message') {
       if (file) await analyze({ mode, file, ...(text.trim() ? { text } : {}) })
       else await analyze({ mode, text })
@@ -96,10 +177,12 @@ export function ScanForm({ config, ownerId }: Readonly<{ config: ScanConfig; own
       <form noValidate ref={form} onSubmit={handleSubmit}>
         {(isUrl || config.id === 'message') && <div className="text-field">
           <label className="field-label" htmlFor="scan-text">{config.fieldLabel}</label>
-          {isUrl ? <input className="text-input" id="scan-text" type="url" inputMode="url" autoComplete="off" spellCheck={false} placeholder="https://contoh.com" value={text} maxLength={4096} aria-invalid={Boolean(error)} aria-describedby={error ? 'scan-error' : undefined} onChange={(event) => { setText(event.target.value); setError(null); clearAnalysis() }} />
+          {isUrl ? <input className="text-input" id="scan-text" type="url" inputMode="url" autoComplete="off" spellCheck={false} placeholder="Masukkan tautan atau domain website…" value={text} maxLength={4096} aria-invalid={Boolean(error)} aria-describedby={`url-help${error ? ' scan-error' : ''}`} onChange={(event) => { setText(event.target.value); setConsent(noConsent); setDetectorConsent(false); setError(null); clearAnalysis() }} />
             : <textarea className="text-input" id="scan-text" rows={4} placeholder="Tempel pesan mencurigakan di sini…" maxLength={10000} value={text} aria-invalid={Boolean(error)} aria-describedby={`message-help${error ? ' scan-error' : ''}`} onChange={(event) => { setText(event.target.value); setError(null); clearAnalysis() }} />}
           {config.id === 'message' && <p className="input-help" id="message-help">Teks minimal 10 karakter, maksimal 10.000. Bisa juga menggunakan screenshot di bawah.</p>}
+          {isUrl && <p className="input-help" id="url-help">AWASIN memeriksa struktur alamat dan mencocokkan domain dengan referensi resmi yang tersedia.</p>}
         </div>}
+        {isUrl && <ScanConsent value={consent} onChange={setConsent} detectorConsent={detectorConsent} onDetectorConsent={setDetectorConsent} />}
         {!isUrl && <FileUpload label={config.id === 'message' ? 'Screenshot pesan (opsional)' : config.fieldLabel} video={config.id === 'video'} file={file} error={error} onChange={(next) => {
           generation.current++;setDecoded(null);setDecoding(false)
           clearAnalysis()
@@ -119,11 +202,12 @@ export function ScanForm({ config, ownerId }: Readonly<{ config: ScanConfig; own
           {decodedHttpUrl(decoded) && <button type="button" className="button button-red" disabled={submitting} onClick={() => void analyze({ mode: 'qr', payload: decoded })}>Periksa tautan dari QR</button>}
         </section>}
         {requestError && <p className="form-error" role="alert">{requestError}</p>}
-        <output className={submitting || result ? 'scan-notice' : 'sr-only'}>
+        <output className={submitting || (result && !result.url_report) ? 'scan-notice' : 'sr-only'}>
           {submitting && 'Menghubungi layanan pemeriksaan…'}
-          {result && <><Info size={20} aria-hidden="true" /><span><strong>{result.explanation}</strong> {result.limitations.join(' ')}</span></>}
+          {result && !result.url_report && <><Info size={20} aria-hidden="true" /><span><strong>{result.explanation}</strong> {result.limitations.join(' ')}</span></>}
         </output>
-        {result && result.evidence.length > 0 && <ul className="scan-notice">
+        {result?.url_report && <UrlAnalysisReport result={result} ai={ai} />}
+        {result && !result.url_report && result.evidence.length > 0 && <ul className="scan-notice">
           {result.evidence.map(item => <li key={item.id}>{item.explanation} ({item.source})</li>)}
         </ul>}
       </form>

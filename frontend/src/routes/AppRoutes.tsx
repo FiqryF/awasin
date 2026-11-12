@@ -58,7 +58,7 @@ export function AppRoutes() {
         <Route path="/feedback" element={<FeedbackPage />} />
         <Route path="/scan/link" element={<ScanWorkspacePage mode="link"/>}/>
         <Route path="/scan/message" element={<ScanWorkspacePage mode="message"/>}/>
-        <Route path="/scan/website" element={<ScanWorkspacePage mode="website"/>}/>
+        <Route path="/scan/website" element={<ScanWorkspacePage mode="link"/>}/>
         <Route path="/scan/qr" element={<ScanWorkspacePage mode="qr"/>}/>
         <Route path="/scan/media" element={<ScanWorkspacePage mode="image"/>}/>
         <Route element={<ProtectedRoute/>}><Route path="/history" element={<ScanHistoryPage/>}/><Route path="/history/:id" element={<AnalysisDetailPage/>}/></Route>

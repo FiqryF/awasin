@@ -27,7 +27,7 @@ function LoginIdentity() {
         setelah masuk.
       </p>
       <div className="auth-identity-features">
-        {['Link Inspector', 'Message Analyzer', 'QR Security Scanner'].map((f) => (
+        {['Link & Website Inspector', 'Message Analyzer', 'QR Code Security Scanner'].map((f) => (
           <div key={f} className="auth-identity-feature-item">
             <ShieldCheck size={14} aria-hidden="true" />
             <span>{f}</span>

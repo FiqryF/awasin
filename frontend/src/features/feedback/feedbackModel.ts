@@ -34,7 +34,7 @@ export const feedbackFields: Record<FeedbackCategory, readonly FeedbackField[]> 
     description('Penjelasan masalah'),
   ],
   bug: [
-    { name: 'feature', label: 'Halaman atau fitur yang bermasalah', required: true, max: 120, options: ['Link Inspector', 'Message Analyzer', 'Fake Website Detector', 'QR Code Scanner', 'AI Media Analyzer', 'Login/Register', 'Lainnya'] },
+    { name: 'feature', label: 'Halaman atau fitur yang bermasalah', required: true, max: 120, options: ['Link & Website Inspector', 'Message Analyzer', 'QR Code Security Scanner', 'AI Media Authenticity Analyzer', 'Login/Register', 'Lainnya'] },
     description('Deskripsi masalah'),
     { name: 'reproduction', label: 'Langkah untuk mereproduksi masalah', multiline: true, max: 2000, placeholder: 'Apa yang kamu lakukan sebelum masalah muncul?' },
   ],

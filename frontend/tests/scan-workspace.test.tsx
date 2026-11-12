@@ -54,8 +54,240 @@ async function enterText(input: HTMLInputElement | HTMLTextAreaElement, value: s
 }
 it.each(['link', 'message', 'website', 'qr', 'image', 'video'])('preselects %s from the URL without reloading', async mode => {
   const host = await mount(mode)
-  expect(host.querySelector('[aria-selected="true"]')?.id).toBe(`tab-${mode}`)
-  expect(host.querySelector('[role="tabpanel"]')?.id).toBe(`panel-${mode}`)
+  const visibleMode = mode === 'website' ? 'link' : mode
+  expect(host.querySelector('[aria-selected="true"]')?.id).toBe(`tab-${visibleMode}`)
+  expect(host.querySelector('[role="tabpanel"]')?.id).toBe(`panel-${visibleMode}`)
+  expect(host.querySelectorAll('[role="tab"]')).toHaveLength(5)
+  expect(host.querySelector('#tab-website')).toBeNull()
+})
+
+it('moves focus and selection from the merged tab using the arrow key', async () => {
+  const host = await mount('website')
+  const tab = host.querySelector<HTMLButtonElement>('#tab-link')!
+  expect(tab.textContent).toBe('Link & Website')
+  tab.focus()
+  await act(async () => tab.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })))
+  expect(document.activeElement?.id).toBe('tab-message')
+  expect(host.querySelector('#tab-message')?.getAttribute('aria-selected')).toBe('true')
+})
+
+const aiTicket = 'a'.repeat(43)
+function aiScan(ai: { status: string; ticket?: string } | null = null) {
+  return new Response(JSON.stringify({
+    analysis_id: 'fixture', request_id: 'fixture', mode: 'link', status: 'completed', risk: 'medium',
+    explanation: 'Temuan AWASIN tetap terlihat.', evidence: [], limitations: [], history_eligible: false, ai,
+    url_report: {
+      display_url: 'https://example.org', registered_domain: 'example.org', scheme_assumed: false, components_hidden: false,
+      threat_status: 'not_requested', threat_checked_at: null, threat_provider: 'Google Safe Browsing',
+      identity_status: 'insufficient_evidence', recommendations: [],
+    },
+  }))
+}
+
+function fullInspectionOption(host: HTMLElement) {
+  return host.querySelector<HTMLInputElement>('input[aria-describedby="scan-consent-help"]')!
+}
+
+it('loads the validated Mistral card after rendering the verdict and consumes consent once', async () => {
+  let finish!: (response: Response) => void
+  vi.mocked(fetch).mockResolvedValueOnce(aiScan({ status: 'pending', ticket: aiTicket }))
+    .mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+  const host = await mount('link')
+  const input = host.querySelector<HTMLInputElement>('#scan-text')!
+  await enterText(input, 'https://example.org/')
+  const consent = fullInspectionOption(host)
+  expect(consent.checked).toBe(false)
+  expect(consent.labels?.[0].textContent).toBe('Izinkan pemeriksaan lengkap')
+  consent.focus()
+  expect(document.activeElement).toBe(consent)
+  await act(async () => consent.click())
+  await submit(host)
+  expect(host.textContent).toContain('Ada indikasi mencurigakan')
+  expect(host.querySelector('.url-ai-report [role="status"]')?.textContent).toContain('sedang menyiapkan')
+  expect(consent.checked).toBe(false)
+  const [scan, ai] = vi.mocked(fetch).mock.calls
+  expect(JSON.parse(String(scan[1]?.body))).toEqual({
+    mode: 'link', url: 'https://example.org/', threat_lookup_consent: true, enhanced_lookup_consent: true, ai_consent: true,
+  })
+  expect(ai[0]).toMatch(/\/analysis\/explanation$/)
+  expect(JSON.parse(String(ai[1]?.body))).toEqual({ ticket: aiTicket, consent: true })
+  await act(async () => finish(new Response(JSON.stringify({
+    status: 'completed', summary: 'Ringkasan berdasarkan bukti.', limitations: ['Konten belum diperiksa.'],
+    findings: [{ evidence_ids: ['EV-001'], source: 'Google Safe Browsing', explanation: 'Pemeriksaan dilewati.' }],
+    recommendations: ['Periksa alamat resmi.'],
+  }))))
+  expect(host.querySelector('.url-ai-report')?.textContent).toContain('Pemeriksaan dilewati.')
+  expect(host.querySelector('.url-ai-report')?.textContent).not.toContain('EV-001')
+  expect(host.querySelector('.url-technical:not([open])')?.textContent).toContain('Google Safe Browsing · EV-001')
+  expect(host.querySelectorAll('.url-actions')).toHaveLength(1)
+  expect(host.textContent).toContain('Ada indikasi mencurigakan')
+  expect(fetch).toHaveBeenCalledTimes(2)
+})
+
+it.each([
+  ['validation_failed', 'tidak lolos pemeriksaan bukti'],
+  ['timeout', 'melewati batas waktu'],
+  ['rate_limited', 'Batas permintaan'],
+  ['unavailable', 'belum tersedia'],
+  ['disabled', 'dinonaktifkan'],
+])('preserves deterministic output when Mistral is %s', async (status, message) => {
+  vi.mocked(fetch).mockResolvedValueOnce(aiScan(status === 'disabled' ? { status } : { status: 'pending', ticket: aiTicket }))
+  if (status !== 'disabled') vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ status })))
+  const host = await mount('link')
+  await enterText(host.querySelector<HTMLInputElement>('#scan-text')!, 'https://example.org/')
+  await act(async () => fullInspectionOption(host).click())
+  await submit(host)
+  expect(host.querySelector('.url-ai-report [role="status"]')?.textContent).toContain(message)
+  expect(host.textContent).toContain('Ada indikasi mencurigakan')
+  expect(fetch).toHaveBeenCalledTimes(status === 'disabled' ? 1 : 2)
+})
+
+it('cancels stale AI results on edit and sends no AI request for the next unconsented scan', async () => {
+  let finish!: (response: Response) => void
+  vi.mocked(fetch).mockResolvedValueOnce(aiScan({ status: 'pending', ticket: aiTicket }))
+    .mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    .mockResolvedValueOnce(aiScan())
+  const host = await mount('link')
+  const input = host.querySelector<HTMLInputElement>('#scan-text')!
+  await enterText(input, 'https://example.org/')
+  await act(async () => fullInspectionOption(host).click())
+  await submit(host)
+  const oldSignal = vi.mocked(fetch).mock.calls[1][1]?.signal
+  await enterText(input, 'https://example.com/')
+  expect(oldSignal?.aborted).toBe(true)
+  expect(fullInspectionOption(host).checked).toBe(false)
+  await submit(host)
+  await act(async () => finish(new Response(JSON.stringify({ status: 'validation_failed' }))))
+  expect(host.querySelector('.url-ai-report')).toBeNull()
+  expect(fetch).toHaveBeenCalledTimes(3)
+  expect(JSON.parse(String(vi.mocked(fetch).mock.calls[2][1]?.body))).toEqual({ mode: 'link', url: 'https://example.com/' })
+})
+
+it('defaults to an AWASIN-only scan and allows a specific provider choice in data details', async () => {
+  vi.mocked(fetch).mockResolvedValueOnce(aiScan()).mockResolvedValueOnce(aiScan())
+  const host = await mount('link')
+  await enterText(host.querySelector<HTMLInputElement>('#scan-text')!, 'https://example.org/')
+  const full = fullInspectionOption(host)
+  const details = host.querySelector<HTMLDetailsElement>('.scan-consent-details')!
+  expect(full.checked).toBe(false)
+  expect(details.open).toBe(false)
+  await submit(host)
+  expect(fetch).toHaveBeenCalledTimes(1)
+  expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({ mode: 'link', url: 'https://example.org/' })
+  await act(async () => { details.open = true })
+  expect(details.textContent).toContain('termasuk path')
+  expect(details.textContent).toContain('Base64')
+  expect(details.textContent).toContain('Google Public DNS')
+  const google = details.querySelector<HTMLInputElement>('input[aria-describedby="scan-data-threat_lookup_consent"]')!
+  await act(async () => google.click())
+  expect(full.indeterminate).toBe(true)
+  await submit(host)
+  expect(fetch).toHaveBeenCalledTimes(2)
+  expect(JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body))).toEqual({
+    mode: 'link', url: 'https://example.org/', threat_lookup_consent: true,
+  })
+  expect(google.checked).toBe(false)
+  expect(full.indeterminate).toBe(false)
+})
+
+it('keeps Detector consent separate and renders validated findings without changing the verdict', async () => {
+  vi.stubEnv('VITE_AI_THREAT_DETECTOR_PROVIDER', 'Detector fixture')
+  try {
+    const fixture = await aiScan().json()
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({
+      ...fixture, detector: { status: 'completed', findings: [{
+        assessment: 'suspected', description: 'Pola akun patut diperiksa.', feature_ids: ['UF-01'],
+      }] },
+    })))
+    const host = await mount('link')
+    await enterText(host.querySelector<HTMLInputElement>('#scan-text')!, 'https://example.org/')
+    const detector = host.querySelector<HTMLInputElement>('input[aria-describedby="scan-detector-privacy"]')!
+    expect(detector.checked).toBe(false)
+    await act(async () => fullInspectionOption(host).click())
+    expect(detector.checked).toBe(false)
+    await act(async () => fullInspectionOption(host).click())
+    await act(async () => detector.click())
+    await submit(host)
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({
+      mode: 'link', url: 'https://example.org/', detector_consent: true,
+    })
+    const region = host.querySelector('[aria-label="Analisis AI karakteristik tautan"]')!
+    expect(region.textContent).toContain('Dugaan AI')
+    expect(region.textContent).toContain('Konten website belum diperiksa secara langsung.')
+    expect(host.querySelector('.url-result-card')?.getAttribute('data-risk')).toBe('medium')
+    expect(fetch).toHaveBeenCalledTimes(1)
+  } finally {
+    vi.unstubAllEnvs()
+  }
+})
+
+it.each([
+  ['timeout', 'Provider melewati batas waktu'],
+  ['no_match', 'Tidak ditemukan dalam daftar ancaman yang diperiksa'],
+  ['match', 'Cocok dengan daftar ancaman'],
+  ['unsupported', 'Alamat ini tidak didukung untuk lookup eksternal'],
+])('renders structure evidence and Safe Browsing state %s', async (status, providerText) => {
+  const matched = status === 'match'
+  const vtStatus = matched ? 'found' : status === 'timeout' ? 'rate_limited' : 'not_found'
+  const baseCheck = { observed_at: null, specificity: null, verdict: null, freshness: null,
+    counts: {}, categories: [], details: [], limitations: [], record_id: null }
+  vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({
+    analysis_id: 'fixture', request_id: 'fixture', mode: 'link', status: matched ? 'completed' : 'partial', risk: matched ? 'high' : 'unknown',
+    explanation: 'Ada indikator pada alamat yang layak ditinjau.',
+    evidence: [{ id: 'finding', code: 'account_path', kind: 'structure', explanation: 'Path menyebut login.',
+      source: 'Struktur URL', indicator: null, limitations: ['Temuan ini belum cukup untuk menilai risiko.'] },
+    ...(matched ? [{ id: 'threat', code: 'threat_match', kind: 'intelligence', explanation: 'Kecocokan daftar ancaman.',
+      source: 'Google Safe Browsing', indicator: 'SOCIAL_ENGINEERING', limitations: [] }] : [])],
+    limitations: ['Konten halaman website tidak diperiksa.', 'Lookup eksternal belum tersedia.'],
+    history_eligible: false,
+    url_report: {
+      display_url: 'https://example.org', registered_domain: 'example.org', scheme_assumed: false, components_hidden: true,
+      threat_status: status, threat_checked_at: status === 'timeout' ? null : '2026-11-11T12:00:00Z', threat_provider: 'Google Safe Browsing',
+      identity_status: 'insufficient_evidence', recommendations: ['Buka layanan dari kanal resmi.'],
+      supplementary_checks: [
+        { ...baseCheck, provider: 'VirusTotal', status: vtStatus,
+          ...(matched ? { observed_at: '2026-11-10T12:00:00Z', specificity: 'exact_url', freshness: 'recent',
+            verdict: 'malicious', counts: { malicious: 3, suspicious: 1 } } : {}) },
+        { ...baseCheck, provider: 'urlscan.io', status: 'found', observed_at: '2025-11-11T12:00:00Z',
+          specificity: 'related_domain', verdict: 'unknown', freshness: 'stale' },
+        { ...baseCheck, provider: 'DNS', status: 'found', details: ['A 93.184.216.34'] },
+        { ...baseCheck, provider: 'RDAP', status: status === 'unsupported' ? 'skipped' : 'unavailable' },
+      ],
+    },
+  })))
+  const host = await mount('link')
+  await enterText(host.querySelector<HTMLInputElement>('#scan-text')!, 'https://example.org/login')
+  const consent = fullInspectionOption(host)
+  expect(consent.checked).toBe(false)
+  await act(async () => consent.click())
+  await submit(host)
+  const [, request] = vi.mocked(fetch).mock.calls[0]
+  expect(JSON.parse(String(request?.body)).threat_lookup_consent).toBe(true)
+  expect(JSON.parse(String(request?.body)).enhanced_lookup_consent).toBe(true)
+  const report = host.querySelector('.url-report')!
+  expect(report, host.textContent ?? '').not.toBeNull()
+  expect(report.getAttribute('aria-label')).toBe('Hasil Link & Website Inspector')
+  expect(report.querySelector('.url-website h4')?.textContent).toBe('example.org')
+  expect(report.textContent).toContain(matched ? 'Ancaman ditemukan' : 'Belum dapat dipastikan')
+  const coverage = { match: '4 dari 5', no_match: '4 dari 5', timeout: '2 dari 5', unsupported: '3 dari 3' }
+  expect(report.querySelector('.url-result-card')?.textContent).toContain(`${coverage[status as keyof typeof coverage]} sumber luar memberikan hasil.`)
+  expect(report.textContent).not.toMatch(/\d\s*%/)
+  expect(report.querySelector('.url-findings ol')?.textContent).toContain('Path menyebut login.')
+  expect(report.querySelector('.url-findings ol')?.textContent).toContain('Sertifikat dan koneksi ke situs belum diperiksa.')
+  expect(report.textContent).toContain(providerText)
+  expect(report.textContent).toContain('Domain terkait')
+  expect(report.textContent).toContain('Lebih dari 30 hari')
+  expect(report.textContent).toContain('A 93.184.216.34')
+  expect(report.textContent).toContain(status === 'unsupported' ? 'Dilewati' : 'Provider belum tersedia')
+  expect(report.textContent).toContain(matched ? 'Deteksi berbahaya 3'
+    : vtStatus === 'not_found' ? 'Laporan historis tidak ditemukan' : 'Batas permintaan tercapai')
+  if (matched) expect(report.querySelector('.url-result-card')?.textContent).toContain('Rekayasa sosial atau phishing')
+  expect(report.textContent).toContain('Konten halaman website tidak diperiksa.')
+  expect(report.querySelector('details:not([open]) summary')?.textContent).toContain('Lihat detail pemeriksaan')
+  expect(report.querySelector('a')).toBeNull()
+  await enterText(host.querySelector<HTMLInputElement>('#scan-text')!, 'https://example.org/other')
+  expect(consent.checked).toBe(false)
+  expect(host.querySelector('.url-report')).toBeNull()
 })
 it.each(['link', 'message', 'website', 'image', 'video'])('does not fabricate or save analysis after valid %s input', async mode => {
   vi.mocked(fetch).mockResolvedValueOnce(unavailable(mode))
@@ -74,6 +306,7 @@ it.each(['link', 'message', 'website', 'image', 'video'])('does not fabricate or
   expect(options?.method).toBe('POST')
   expect(new Headers(options?.headers).has('Authorization')).toBe(false)
   if (options?.body instanceof FormData) expect((options.body.get('file') as File).name).toBe('upload')
+  if (mode === 'link' || mode === 'website') expect(JSON.parse(String(options?.body))).not.toHaveProperty('enhanced_lookup_consent')
   expect(window.open).not.toHaveBeenCalled()
 })
 it('shows decoded QR text safely before user-selected URL inspection', async () => {

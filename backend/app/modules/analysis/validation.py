@@ -1,61 +1,15 @@
 from collections.abc import Iterator
-from ipaddress import IPv6Address, ip_address
 from typing import BinaryIO
 from unicodedata import category
-from urllib.parse import urlsplit, urlunsplit
 
-import idna
 from PIL import Image
 
 from .schemas import MediaMetadata
+from .url import public_url as public_url
 
 IMAGE_LIMIT = 10 * 1024 * 1024
 VIDEO_LIMIT = 50 * 1024 * 1024
 IMAGE_FORMATS = {"image/jpeg": "JPEG", "image/png": "PNG", "image/webp": "WEBP"}
-
-
-def public_url(value: str, *, allow_domain: bool = False) -> str:
-    """Validate URL syntax and literal targets without resolving DNS or opening connections."""
-    value = value.strip(" ")
-    if allow_domain and value and not value.startswith(("/", "?", "#")) and ":" not in value:
-        value = "https://" + value
-    if any(char.isspace() or category(char).startswith("C") or char == "\\" for char in value):
-        raise ValueError("Invalid URL characters")
-    parts = urlsplit(value)
-    host = parts.hostname
-    if parts.scheme not in {"http", "https"} or not host or any(c in parts.netloc for c in "@%"):
-        raise ValueError("Invalid URL authority")
-    port = parts.port
-    if parts.netloc.endswith(":") or port == 0:
-        raise ValueError("Invalid URL port")
-    if "[" in parts.netloc:
-        prefix = f"[{host}]"
-        if not parts.netloc.lower().startswith(prefix) or (
-            parts.netloc[len(prefix):] and not parts.netloc[len(prefix):].startswith(":")
-        ):
-            raise ValueError("Invalid IP literal")
-    try:
-        address = ip_address(host)
-    except ValueError:
-        if "[" in parts.netloc:
-            raise ValueError("Invalid IP literal") from None
-        hostname = idna.encode(host, uts46=True, std3_rules=True).decode("ascii").rstrip(".")
-        labels = hostname.split(".")
-        if (
-            len(labels) < 2
-            or not labels[-1][0].isalpha()
-            or labels[-1].startswith("0x")
-            or labels[-1] in {"localhost", "local", "internal", "invalid", "test"}
-            or hostname.endswith(".home.arpa")
-        ):
-            raise ValueError("Invalid public hostname") from None
-    else:
-        checked = address.ipv4_mapped or address if isinstance(address, IPv6Address) else address
-        if not checked.is_global or checked.is_multicast:
-            raise ValueError("Nonpublic IP address")
-        hostname = f"[{address}]" if isinstance(address, IPv6Address) else str(address)
-    authority = f"{hostname}:{port}" if port is not None else hostname
-    return urlunsplit((parts.scheme, authority, parts.path or "/", parts.query, ""))
 
 
 def checked_text(value: str, minimum: int) -> str:

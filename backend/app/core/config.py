@@ -1,11 +1,15 @@
 """Read environment configuration in one place, without remote dependencies."""
 
+from pathlib import Path
 import re
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
 from pydantic import AnyHttpUrl, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+
+BACKEND_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
 
 def _normalize_origin(origin: str) -> str:
@@ -38,7 +42,9 @@ def _normalize_origin(origin: str) -> str:
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore", hide_input_in_errors=True)
+    model_config = SettingsConfigDict(
+        env_file=BACKEND_ENV_FILE, env_file_encoding="utf-8", extra="ignore", hide_input_in_errors=True,
+    )
 
     app_name: str = Field(default="AWASIN API", min_length=1, max_length=100)
     app_env: Literal["development", "test", "staging", "production"] = "development"
@@ -52,6 +58,19 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     supabase_url: str | None = None
     supabase_publishable_key: SecretStr | None = None
+    web_risk_enabled: bool = False
+    web_risk_api_key: SecretStr | None = None
+    google_safe_browsing_api_key: SecretStr | None = None
+    safe_browsing_api_key: SecretStr | None = None
+    virustotal_api_key: SecretStr | None = None
+    urlscan_api_key: SecretStr | None = None
+    verified_domain_snapshot: str | None = None
+    mistral_api_key: SecretStr | None = None
+    mistral_model: str = "ministral-8b-latest"
+    awasin_ai_enabled: bool = False
+    ai_threat_detector_enabled: bool = False
+    openrouter_api_key: SecretStr | None = None
+    openrouter_detector_model: str = "nvidia/nemotron-3.5-super-vl:free"
     supabase_jwt_algorithm: Literal["ES256", "RS256"] = "ES256"
 
     @field_validator("supabase_publishable_key")

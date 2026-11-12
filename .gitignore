@@ -1,0 +1,12 @@
+/dataset/
+/datasets/raw/
+/datasets/processed/
+/datasets/evaluation/
+/datasets/.pytest_cache/
+/datasets/**/*.joblib
+/datasets/**/*.pkl
+/datasets/**/*.pickle
+/datasets/**/*.onnx
+/datasets/**/*.safetensors
+/datasets/**/*.whl
+**/__pycache__/

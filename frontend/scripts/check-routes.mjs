@@ -49,16 +49,20 @@ try {
     }
     if (path === '/') {
       for (const id of ['beranda', 'periksa', 'edukasi']) assert.ok(html.includes(`id="${id}"`), `Missing section: ${id}`)
-      assert.equal((html.match(/role="tab"/g) ?? []).length, 6)
+      assert.equal((html.match(/role="tab"/g) ?? []).length, 5)
       assert.ok(html.includes('href="/education"'))
       assert.ok(html.includes('href="#periksa"'))
     }
     if (path === '/dashboard') {
       for (const id of ['beranda', 'periksa', 'edukasi']) assert.ok(html.includes(`id="${id}"`), `Missing dashboard section: ${id}`)
       assert.ok(html.includes('SSR fixture'), 'Dashboard must use verified profile name')
-      assert.equal((html.match(/role="tab"/g) ?? []).length, 6)
+      assert.equal((html.match(/role="tab"/g) ?? []).length, 5)
       assert.ok(html.includes('Memuat aktivitas pemeriksaan'), 'History must load real account records')
       assert.ok(html.includes('Menu akun') && !html.includes('Masuk ke akun AWASIN'), 'Authenticated navbar must expose profile instead of login')
+    }
+    if (path === '/scan/website') {
+      assert.ok(html.includes('id="tab-link"') && !html.includes('id="tab-website"'))
+      assert.equal((html.match(/role="tab"/g) ?? []).length, 5)
     }
     console.log(`PASS ${path}`)
   })
@@ -78,12 +82,8 @@ try {
     console.log(`PASS ${path}`)
   })
   const { validateScanInput, validateFile } = await server.ssrLoadModule('/src/features/scan/scanConfig.ts')
-  for (const mode of ['link', 'website']) {
-    for (const url of ['', 'javascript:alert(1)', 'file:///etc/passwd', 'data:text/plain,test']) assert.ok(validateScanInput(mode, url, null), `Must reject: ${url}`)
-    for (const url of ['https://contoh.com', ' https://contoh.com/path?q=1 ']) assert.equal(validateScanInput(mode, url, null), null)
-  }
-  assert.ok(validateScanInput('link', 'contoh.com', null))
-  assert.equal(validateScanInput('website', 'contoh.com', null), null)
+  for (const url of ['', 'javascript:alert(1)', 'file:///etc/passwd', 'data:text/plain,test']) assert.ok(validateScanInput('link', url, null), `Must reject: ${url}`)
+  for (const url of ['contoh.com', 'https://contoh.com', ' https://contoh.com/path?q=1 ']) assert.equal(validateScanInput('link', url, null), null)
   const image = { type: 'image/png', size: 1024 }
   const video = { type: 'video/mp4', size: 2048 }
   assert.ok(validateScanInput('message', 'pendek', null))
@@ -101,7 +101,7 @@ try {
   assert.ok(validateFile({ ...image, size: 10 * 1024 * 1024 + 1 }, 'image'))
   assert.equal(validateFile({ ...video, size: 50 * 1024 * 1024 }, 'video'), null)
   assert.ok(validateFile({ ...video, size: 50 * 1024 * 1024 + 1 }, 'video'))
-  console.log('PASS six scan modes, URL protocols, message lengths, MIME types and file-size boundaries')
+  console.log('PASS five scan modes, URL protocols, message lengths, MIME types and file-size boundaries')
   const { isValidEmail } = await server.ssrLoadModule('/src/utils/isValidEmail.ts')
   for (const email of ['nama@contoh.com', 'nama+tag@sub.contoh.id', `${'a'.repeat(249)}@b.co`]) {
     assert.equal(isValidEmail(email), true, `Must accept valid email: ${email}`)

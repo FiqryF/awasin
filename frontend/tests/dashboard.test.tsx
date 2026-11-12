@@ -51,7 +51,7 @@ describe('authenticated dashboard foundation', () => {
     const host = await render(<Routes><Route element={<MainLayout />}><Route element={<ProtectedRoute />}><Route path="/dashboard" element={<DashboardPage />} /></Route></Route></Routes>)
     expect(host.querySelectorAll('h1')).toHaveLength(1)
     expect(host.querySelector('h1')?.textContent).toContain('Pengguna Uji')
-    expect(host.querySelectorAll('[role="tab"]')).toHaveLength(6)
+    expect(host.querySelectorAll('[role="tab"]')).toHaveLength(5)
     expect(host.querySelectorAll('footer')).toHaveLength(1)
     expect(host.querySelectorAll('.article-card')).toHaveLength(4)
     expect(host.querySelector('video')).toBeNull() // Reduced motion is enabled in this fixture.
@@ -84,7 +84,7 @@ describe('authenticated dashboard foundation', () => {
     expect(host.querySelector('a[aria-label="Masuk ke akun AWASIN"]')).not.toBeNull()
     expect(host.querySelector('[aria-label="Menu akun"]')).toBeNull()
     expect([...host.querySelectorAll('.desktop-nav a')].map(a => a.textContent)).toEqual(['Beranda', 'Periksa', 'Edukasi', 'Feedback'])
-    expect(host.querySelectorAll('[role="tab"]')).toHaveLength(6)
+    expect(host.querySelectorAll('[role="tab"]')).toHaveLength(5)
   })
 })
 

@@ -16,6 +16,8 @@ class RequestBodyLimit:
         if scope['method'] == 'POST' and path.startswith(media_path) and path[len(media_path):] in {'message', 'qr', 'image', 'video'}:
             return await self.app(scope, receive, send)
         limit = 32768 if path == self.prefix + '/feedback' else 262144
+        if path == self.prefix + '/analysis/explanation':
+            limit = 1024
         chunks, size = [], 0
         while True:
             message = await receive()

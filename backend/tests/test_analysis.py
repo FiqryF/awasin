@@ -44,8 +44,6 @@ def box(kind, data):
 
 
 @pytest.mark.parametrize("payload", [
-    {"mode": "link", "url": "https://example.com/?marker=private"},
-    {"mode": "website", "url": "bücher.example"},
     {"mode": "message", "text": "Pesan sintetis untuk tes"},
     {"mode": "qr", "payload": "WIFI:T:WPA;S:example;P:private;;"},
     {"mode": "qr", "payload": "https://example.com"},

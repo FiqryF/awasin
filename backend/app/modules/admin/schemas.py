@@ -6,12 +6,10 @@ from uuid import UUID
 from urllib.parse import urlsplit
 
 import idna
-import tldextract
 import json
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-# Offline bundled Public Suffix List: no runtime DNS, HTTP, or candidate discovery.
-suffixes = tldextract.TLDExtract(suffix_list_urls=(), cache_dir=None, include_psl_private_domains=True)
+from app.core.domains import suffixes
 
 
 def normalize_domain(value: str) -> str:

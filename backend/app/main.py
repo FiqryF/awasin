@@ -1,6 +1,8 @@
 """ASGI application factory. Run from backend with python -m app."""
 
 from contextlib import asynccontextmanager
+import logging
+from pathlib import Path
 
 import httpx
 from fastapi import FastAPI
@@ -15,6 +17,16 @@ from app.modules.health.router import APP_VERSION, router as health_router
 from app.modules.identity.service import IdentityService
 from app.modules.feedback.router import FeedbackLimiter
 from app.modules.analysis.orchestrator import AnalysisOrchestrator
+from app.modules.analysis.ai_analyst import SecurityAnalyst
+from app.modules.analysis.threat_detector import ThreatDetector
+from app.modules.analysis.openrouter_detector import FREE_MODEL, OpenRouterDetector
+from app.modules.analysis.ai_tickets import ExplanationTickets
+from app.modules.analysis.inspect_url import UrlInspector
+from app.modules.analysis.historical import DomainIntelligence, Urlscan, VirusTotal
+from app.modules.analysis.registry import load_registry
+from app.modules.analysis.safe_browsing import SafeBrowsing
+from app.modules.analysis.url import ThreatIntelligenceProvider
+from app.modules.analysis.web_risk import WebRisk
 from app.core.body_limit import RequestBodyLimit
 
 
@@ -27,7 +39,38 @@ def create_app(settings: Settings | None = None) -> ASGIApp:
         async with httpx.AsyncClient(timeout=5, follow_redirects=False, trust_env=False) as client:
             api.state.identity = IdentityService(settings, client)
             api.state.feedback_limiter = FeedbackLimiter()
-            api.state.analysis = AnalysisOrchestrator()
+            api.state.security_analyst = SecurityAnalyst(settings)
+            openrouter_key = settings.openrouter_api_key.get_secret_value().strip() if settings.openrouter_api_key else ""
+            detector_model = settings.openrouter_detector_model.strip()
+            detector_provider = None
+            if settings.ai_threat_detector_enabled and openrouter_key and FREE_MODEL.fullmatch(detector_model):
+                detector_provider = OpenRouterDetector(openrouter_key, detector_model)
+            api.state.threat_detector = ThreatDetector(settings.ai_threat_detector_enabled, detector_provider)
+            api.state.explanation_tickets = ExplanationTickets()
+            safe_key = settings.google_safe_browsing_api_key or settings.safe_browsing_api_key
+            web_key = settings.web_risk_api_key
+            provider: ThreatIntelligenceProvider | None = None
+            if safe_key and safe_key.get_secret_value().strip():
+                provider = SafeBrowsing(client, safe_key.get_secret_value().strip())
+            elif settings.web_risk_enabled and web_key and web_key.get_secret_value().strip():
+                provider = WebRisk(client, web_key.get_secret_value().strip())
+            # HTTP client INFO/DEBUG can expose lookup parameters and headers.
+            for name in ("httpx", "httpcore"):
+                logging.getLogger(name).setLevel(logging.WARNING)
+            vt_key = settings.virustotal_api_key.get_secret_value().strip() if settings.virustotal_api_key else ""
+            urlscan_key = settings.urlscan_api_key.get_secret_value().strip() if settings.urlscan_api_key else ""
+            registry = ()
+            if settings.verified_domain_snapshot:
+                try:
+                    registry = load_registry(Path(settings.verified_domain_snapshot))
+                except (OSError, ValueError, TypeError, KeyError, AttributeError, RecursionError):
+                    logger.warning("Verified domain snapshot unavailable")
+            api.state.detector_domain_references = registry
+            api.state.analysis = AnalysisOrchestrator({"link": UrlInspector(
+                provider, virustotal=VirusTotal(client, vt_key) if vt_key else None,
+                urlscan=Urlscan(client, urlscan_key) if urlscan_key else None,
+                domain_intelligence=DomainIntelligence(client), registry=registry,
+            )})
             yield
 
     api = FastAPI(

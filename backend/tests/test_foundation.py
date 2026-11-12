@@ -1,6 +1,7 @@
 from importlib.metadata import version
 import logging
 import os
+from pathlib import Path
 import sys
 
 from fastapi import HTTPException
@@ -33,7 +34,7 @@ def test_health_and_documentation(settings):
             '/api/v1/admin/domains','/api/v1/admin/domains/{record_id}','/api/v1/admin/domains/{record_id}/review',
             '/api/v1/admin/articles','/api/v1/admin/articles/{record_id}','/api/v1/admin/articles/{record_id}/status',
             '/api/v1/admin/audit','/api/v1/education','/api/v1/education/{slug}',
-            '/api/v1/analysis','/api/v1/analysis/media/{mode}',
+            '/api/v1/analysis','/api/v1/analysis/explanation','/api/v1/analysis/media/{mode}',
         }
 
 
@@ -87,6 +88,26 @@ def test_environment_parsing(monkeypatch):
     settings = Settings(_env_file=None)
     assert settings.cors_origins == ["https://example.com", "http://localhost:5173"]
     assert settings.port == 8123
+
+
+def test_ai_dotenv_path_does_not_follow_working_directory(monkeypatch, tmp_path):
+    expected_path = Path(__file__).resolve().parents[1] / ".env"
+    monkeypatch.chdir(tmp_path)
+    assert Settings.model_config["env_file"] == expected_path
+
+    backend_dir = tmp_path / "backend"
+    backend_dir.mkdir()
+    env_file = backend_dir / ".env"
+    env_file.write_text("AWASIN_AI_ENABLED=true\nMISTRAL_API_KEY=fixture-only\n", encoding="utf-8")
+    (tmp_path / ".env").write_text("AWASIN_AI_ENABLED=false\n", encoding="utf-8")
+    monkeypatch.setitem(Settings.model_config, "env_file", env_file)
+    monkeypatch.delenv("AWASIN_AI_ENABLED", raising=False)
+    monkeypatch.delenv("MISTRAL_API_KEY", raising=False)
+    assert Settings().awasin_ai_enabled is True
+    assert Settings().mistral_api_key is not None
+
+    monkeypatch.setenv("AWASIN_AI_ENABLED", "false")
+    assert Settings().awasin_ai_enabled is False
 
 
 def test_ipv6_and_international_origins():

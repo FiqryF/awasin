@@ -8,7 +8,8 @@ import type { ScanType } from './scanConfig'
 export function ScanPanel({ defaultMode = 'link' }: Readonly<{ defaultMode?: ScanType }>) {
   const [params,setParams]=useSearchParams()
   const { identity } = useAuth()
-  const requested=params.get('mode')
+  const rawMode=params.get('mode')
+  const requested=rawMode === 'website' ? 'link' : rawMode
   const selected=scanTypes.find(type=>type.id===requested)?.id??defaultMode
   const setSelected=(mode:ScanType)=>setParams(previous=>{const next=new URLSearchParams(previous);next.set('mode',mode);return next},{replace:true,preventScrollReset:true})
   const config = scanTypes.find(({ id }) => id === selected)!
