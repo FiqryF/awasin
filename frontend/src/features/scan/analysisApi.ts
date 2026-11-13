@@ -3,7 +3,7 @@ import { requireSupabase } from '../auth/client'
 import type { AnalysisMode } from './scanConfig'
 
 type TextInput =
-  | { mode: 'link' | 'website'; url: string; threat_lookup_consent?: boolean; enhanced_lookup_consent?: boolean; ai_consent?: boolean; detector_consent?: boolean }
+  | { mode: 'link' | 'website'; url: string; threat_lookup_consent?: boolean; enhanced_lookup_consent?: boolean; url_ai_consent?: boolean; openrouter_fallback_consent?: boolean }
   | { mode: 'message'; text: string }
   | { mode: 'qr'; payload: string }
 type MediaInput =
@@ -31,18 +31,20 @@ export const checkLabels = {
   timeout: 'Provider melewati batas waktu', unauthorized: 'Akses provider ditolak',
   error: 'Respons provider tidak dapat diverifikasi',
 } as const
-export const specificityLabels = { exact_url: 'URL sama', hostname: 'Hostname sama', related_domain: 'Domain terkait' } as const
+export const specificityLabels = { exact_url: 'URL sama', hostname: 'Hostname sama', related_domain: 'Domain terkait', file_hash: 'SHA-256 dari arsip URL unduhan yang sama' } as const
 export const verdictLabels = {
   malicious: 'Terdeteksi berbahaya di laporan', suspicious: 'Dicurigai di laporan',
   no_detection: 'Tidak ada deteksi di laporan', unknown: 'Verdict tidak tersedia',
 } as const
 export const freshnessLabels = { recent: 'Dalam 30 hari terakhir', stale: 'Lebih dari 30 hari', unknown: 'Usia laporan belum diketahui' } as const
-const providers = ['VirusTotal', 'urlscan.io', 'DNS', 'RDAP'] as const
+const providers = ['VirusTotal', 'VirusTotal File', 'VirusTotal AI', 'urlscan.io', 'DNS', 'RDAP'] as const
 export type ProviderCheck = {
   provider: typeof providers[number]; status: keyof typeof checkLabels; observed_at: string | null
   specificity: keyof typeof specificityLabels | null; verdict: keyof typeof verdictLabels | null
   freshness: keyof typeof freshnessLabels | null; counts: Partial<Record<'malicious' | 'suspicious' | 'harmless' | 'undetected', number>>
   categories: string[]; details: string[]; limitations: string[]; record_id: string | null
+  archive_observed_at?: string | null
+  engine_count?: number | null
 }
 type UrlReport = {
   display_url: string; registered_domain: string | null; scheme_assumed: boolean; components_hidden: boolean
@@ -56,9 +58,15 @@ type Evidence = {
   source: string; observed_at: string; severity: Risk; validation: 'verified' | 'unverified'; limitations: string[]
 }
 const aiStatuses = ['completed', 'not_requested', 'disabled', 'unavailable', 'rate_limited', 'timeout', 'validation_failed'] as const
+type HistoryStatus = 'saved' | 'disabled' | 'unavailable'
 type AIOffer = { status: 'pending'; ticket: string } | { status: 'disabled' | 'unavailable' | 'rate_limited' }
 export type AIResult = {
+  history_status?: HistoryStatus | null
   status: typeof aiStatuses[number]
+  risk?: Risk
+  needs_verification?: boolean
+  analyst?: 'mistral' | 'nemotron'
+  fallback_status?: 'unavailable' | 'rate_limited' | 'timeout' | 'validation_failed' | null
   summary: string | null
   findings: { evidence_ids: string[]; source: string; explanation: string }[]
   limitations: string[]
@@ -66,9 +74,12 @@ export type AIResult = {
 }
 export type AIState = AIResult | { status: 'loading' } | { status: 'disabled' | 'unavailable' | 'rate_limited' | 'timeout' }
 const detectorStatuses = ['completed', 'disabled', 'unavailable', 'rate_limited', 'timeout', 'validation_failed'] as const
-type DetectorResult = {
+export type DetectorResult = {
   status: typeof detectorStatuses[number]
   findings: { assessment: 'observed' | 'suspected'; description: string; feature_ids: string[] }[]
+  verdict?: 'likely_legitimate' | 'suspicious' | 'malicious' | 'unknown' | null
+  summary?: string | null
+  evidence_ids?: string[]
 }
 export type AnalysisResult = {
   analysis_id: string; request_id: string; mode: AnalysisMode; status: typeof statuses[number]
@@ -78,9 +89,11 @@ export type AnalysisResult = {
   limitations: string[]; error_code: 'engine_unavailable' | 'engine_timeout' | 'engine_failed' | null
   media: { content_type: string; size_bytes: number; width: number | null; height: number | null } | null
   history_eligible: false
+  history_status?: HistoryStatus | null
   url_report?: UrlReport | null
   ai?: AIOffer | null
   detector?: DetectorResult | null
+  detector_offer?: AIOffer | null
 }
 
 function isTextList(value: unknown): value is string[] {
@@ -90,6 +103,8 @@ function isTextList(value: unknown): value is string[] {
 function validProviderCheck(check: ProviderCheck) {
   return check && providers.includes(check.provider) && Object.hasOwn(checkLabels, check.status) &&
     (check.observed_at === null || (typeof check.observed_at === 'string' && Number.isFinite(Date.parse(check.observed_at)))) &&
+    (check.archive_observed_at == null || (typeof check.archive_observed_at === 'string' && Number.isFinite(Date.parse(check.archive_observed_at)))) &&
+    (check.engine_count == null || (Number.isInteger(check.engine_count) && check.engine_count >= 0 && check.engine_count <= 10000)) &&
     (check.specificity === null || Object.hasOwn(specificityLabels, check.specificity)) &&
     (check.verdict === null || Object.hasOwn(verdictLabels, check.verdict)) &&
     (check.freshness === null || Object.hasOwn(freshnessLabels, check.freshness)) &&
@@ -126,22 +141,27 @@ function parseResult(value: unknown, mode: AnalysisMode): AnalysisResult {
       (item.indicator === null || typeof item.indicator === 'string') &&
       Array.isArray(item.limitations) && item.limitations.every(note => typeof note === 'string'))
   )) throw new Error('Respons pemeriksaan tidak valid.')
-  if (result.ai) {
-    const offer = result.ai
-    const valid = offer.status === 'pending' ? /^[A-Za-z0-9_-]{43}$/.test(offer.ticket)
-      : ['disabled', 'unavailable', 'rate_limited'].includes(offer.status)
-    if (!valid) result.ai = null
+  for (const key of ['ai', 'detector_offer'] as const) {
+    const offer = result[key]
+    if (offer && !(offer.status === 'pending' ? /^[A-Za-z0-9_-]{43}$/.test(offer.ticket)
+      : ['disabled', 'unavailable', 'rate_limited'].includes(offer.status))) result[key] = null
   }
-  if (result.detector) {
-    const { status, findings } = result.detector
+  if (result.detector) result.detector = parseDetector(result.detector)
+  return result as AnalysisResult
+}
+
+function parseDetector(result: DetectorResult | null): DetectorResult {
+    if (!result) return { status: 'validation_failed', findings: [] }
+    const { status, findings, verdict, summary, evidence_ids: refs } = result
     if (!detectorStatuses.includes(status) || !Array.isArray(findings) || findings.length > 5 ||
         !findings.every(item => item && ['observed', 'suspected'].includes(item.assessment) &&
           typeof item.description === 'string' && isTextList(item.feature_ids) &&
-          item.feature_ids.every(id => /^UF-\d{2}$/.test(id)))) {
-      result.detector = { status: 'validation_failed', findings: [] }
+          item.feature_ids.every(id => /^UF-\d{2}$/.test(id))) ||
+        (verdict != null && (!['likely_legitimate', 'suspicious', 'malicious', 'unknown'].includes(verdict) ||
+          typeof summary !== 'string' || !isTextList(refs) || !refs.every(id => /^(UF-\d{2}|EV-\d{3})$/.test(id))))) {
+      return { status: 'validation_failed', findings: [] }
     }
-  }
-  return result as AnalysisResult
+    return result
 }
 
 async function analysisHeaders(signal: AbortSignal, ownerId?: string) {
@@ -178,7 +198,7 @@ export async function requestAnalysis(input: AnalysisInput, signal: AbortSignal,
 }
 
 export async function requestAIExplanation(ticket: string, signal: AbortSignal, ownerId?: string): Promise<AIResult> {
-  const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(12_000)])
+  const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(20_000)])
   const headers = await analysisHeaders(requestSignal, ownerId)
   headers.set('Content-Type', 'application/json')
   const result = await apiRequest<AIResult>('/api/v1/analysis/explanation', {
@@ -186,13 +206,30 @@ export async function requestAIExplanation(ticket: string, signal: AbortSignal, 
     headers, signal: requestSignal, cache: 'no-store', credentials: 'omit',
   })
   if (!result || !aiStatuses.includes(result.status)) throw new Error('Respons penjelasan tidak valid.')
+  if (result.fallback_status != null && !['unavailable', 'rate_limited', 'timeout', 'validation_failed'].includes(result.fallback_status)) {
+    throw new Error('Status analis cadangan tidak valid.')
+  }
   if (result.status === 'completed' && (
+    (result.risk !== undefined && !risks.includes(result.risk)) ||
+    (result.needs_verification !== undefined && typeof result.needs_verification !== 'boolean') ||
+    (result.analyst !== undefined && !['mistral', 'nemotron'].includes(result.analyst)) ||
     typeof result.summary !== 'string' || !isTextList(result.limitations) || !isTextList(result.recommendations) ||
     !Array.isArray(result.findings) || !result.findings.every(item => item && typeof item.source === 'string' &&
       typeof item.explanation === 'string' && isTextList(item.evidence_ids) &&
       item.evidence_ids.every(id => /^EV-\d{3}$/.test(id)))
   )) throw new Error('Respons penjelasan tidak valid.')
   return result
+}
+
+export async function requestDetector(ticket: string, signal: AbortSignal, ownerId?: string) {
+  const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(12_000)])
+  const headers = await analysisHeaders(requestSignal, ownerId)
+  headers.set('Content-Type', 'application/json')
+  const result = await apiRequest<DetectorResult>('/api/v1/analysis/detector', {
+    method: 'POST', body: JSON.stringify({ ticket, consent: true }),
+    headers, signal: requestSignal, cache: 'no-store', credentials: 'omit',
+  })
+  return parseDetector(result)
 }
 
 export function analysisErrorMessage(error: unknown): string {

@@ -87,6 +87,24 @@ class HistoryService:
             raise HTTPException(409)
         return await self.get(report_id)
 
+    async def record_url(self, report: ReportDetail) -> None:
+        secret = self.provider.settings.supabase_history_secret_key
+        origin = self.provider.settings.supabase_url
+        key = secret.get_secret_value().strip() if secret else ''
+        if not origin or not key.startswith('sb_secret_'):
+            raise HTTPException(503)
+        row = report.model_dump(mode='json', exclude={'risk'})
+        row['owner_id'] = str(self.identity.id)
+        try:
+            response = await self.provider.client.post(
+                f'{origin}/rest/v1/scan_reports', json=row,
+                headers={'apikey': key, 'Prefer': 'return=minimal'}, timeout=3,
+            )
+        except httpx.HTTPError:
+            raise HTTPException(503) from None
+        if response.status_code != 201:
+            raise HTTPException(503)
+
     async def delete(self, report_id: UUID | None = None) -> int:
         if report_id is None:
             response = await self.provider.request('POST', '/rest/v1/rpc/clear_scan_history', self.token, json={'p_confirm': True})

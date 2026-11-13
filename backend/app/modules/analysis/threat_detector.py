@@ -11,7 +11,7 @@ import httpx
 from pydantic import Field
 
 from .ai_analyst import AnalystInput, decode_output
-from .ai_schema import AIModel, DetectorCategory, DetectorFinding, DetectorResult
+from .ai_schema import AIModel, DetectorCategory, DetectorFinding, DetectorResult, DetectorVerdict, DETECTOR_SUMMARIES
 from .ai_tickets import GLOBAL_LIMIT, PER_SUBJECT_LIMIT, TTL_SECONDS
 from .inspect_url import REFERENCES, domain_identity
 from .registry import DomainReference
@@ -34,6 +34,8 @@ class URLFeature(AIModel):
 
 
 class DetectorInput(AIModel):
+    hostname: str
+    registered_domain: str | None
     features: list[URLFeature]
     assessment: AnalystInput
 
@@ -44,6 +46,8 @@ class FindingChoice(AIModel):
 
 
 class DetectorChoices(AIModel):
+    verdict: DetectorVerdict
+    evidence_ids: list[Annotated[str, Field(pattern=r"^(?:UF-\d{2}|EV-\d{3})$")]] = Field(max_length=6)
     findings: list[FindingChoice] = Field(max_length=5)
 
 
@@ -52,7 +56,7 @@ class DetectorProvider(Protocol):
 
 
 def build_input(target: UrlTarget, assessment: AnalystInput, registry: tuple[DomainReference, ...] = ()) -> DetectorInput:
-    # Only bounded, fixed vocabulary crosses the provider boundary. Names and values stay local.
+    # Host/domain are shared with consent; paths, queries and their values stay local.
     codes: list[Feature] = ["https" if target.scheme == "https" else "http"]
     host = target.hostname
     domain = target.registered_domain
@@ -86,6 +90,7 @@ def build_input(target: UrlTarget, assessment: AnalystInput, registry: tuple[Dom
     if identity in identity_codes:
         codes.append(identity_codes[identity])
     return DetectorInput(
+        hostname=host, registered_domain=domain,
         features=[URLFeature(id=f"UF-{index:02}", code=code) for index, code in enumerate(codes, 1)],
         assessment=assessment,
     )
@@ -101,7 +106,7 @@ RULES = {
 }
 
 
-def validate_detector(raw: str, payload: DetectorInput) -> list[DetectorFinding]:
+def validate_detector(raw: str, payload: DetectorInput) -> DetectorResult:
     choices = DetectorChoices.model_validate(decode_output(raw))
     features = {item.id: item.code for item in payload.features}
     seen: set[str] = set()
@@ -110,12 +115,42 @@ def validate_detector(raw: str, payload: DetectorInput) -> list[DetectorFinding]
         required, assessment, description = RULES[choice.category]
         ids = set(choice.feature_ids)
         if (choice.category in seen or len(ids) != len(choice.feature_ids) or not ids <= features.keys()
-                or {features[id] for id in ids} != required):
+                or not required <= {features[id] for id in ids}):
             raise ValueError("Unsupported Detector claim")
         seen.add(choice.category)
         results.append(DetectorFinding(category=choice.category, assessment=assessment,
-                                       description=description, feature_ids=choice.feature_ids))
-    return results
+                                       description=description,
+                                       feature_ids=[ref for ref in choice.feature_ids if features[ref] in required]))
+    refs = choices.evidence_ids
+    evidence = {item.id: item for item in payload.assessment.evidence}
+    if len(set(refs)) != len(refs) or any(ref not in features and ref not in evidence for ref in refs):
+        raise ValueError("Invalid verdict evidence")
+    codes = {features[ref] for ref in refs if ref in features}
+    cited = [evidence[ref] for ref in refs if ref in evidence]
+    primary_match = any(item.code == "threat_lookup" and item.status == "match" for item in cited)
+    no_match = any(item.code == "threat_lookup" and item.status == "no_match" for item in cited)
+    historical_alert = any(item.scope == "exact_url" and item.historical_verdict in {"malicious", "suspicious"}
+                           for item in payload.assessment.evidence)
+    risk = payload.assessment.risk
+    expected = {"high": "malicious", "medium": "suspicious", "low": "likely_legitimate"}
+    if risk in expected and choices.verdict != expected[risk]:
+        raise ValueError("Detector verdict conflicts with verified risk")
+    if choices.verdict == "likely_legitimate" and (
+        "official_domain" not in codes or not no_match or payload.assessment.risk in {"high", "medium"}
+        or historical_alert or any(item.code == "threat_lookup" and item.status == "match" for item in evidence.values())
+    ):
+        raise ValueError("Unsupported legitimacy verdict")
+    if choices.verdict == "malicious" and not primary_match:
+        raise ValueError("Unsupported malicious verdict")
+    suspicious_codes = {"brand_outside_reference", "similar_domain", "official_name_in_subdomain", "idn",
+                        "encoded_path", "redirect_parameter", "credential_parameter", "ip_literal", "nonstandard_port"}
+    if choices.verdict == "suspicious" and not (codes & suspicious_codes or any(
+        item.severity in {"medium", "high"} or (item.scope == "exact_url" and item.historical_verdict in {"malicious", "suspicious"})
+        for item in cited
+    ) or primary_match):
+        raise ValueError("Unsupported suspicious verdict")
+    return DetectorResult(status="completed", verdict=choices.verdict, summary=DETECTOR_SUMMARIES[choices.verdict],
+                          evidence_ids=refs, findings=results)
 
 
 class DetectorProviderError(Exception):
@@ -161,6 +196,6 @@ class ThreatDetector:
         except Exception:
             return DetectorResult(status="unavailable")
         try:
-            return DetectorResult(status="completed", findings=validate_detector(raw, payload))
+            return validate_detector(raw, payload)
         except (ValueError, RecursionError):
             return DetectorResult(status="validation_failed")

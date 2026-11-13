@@ -29,8 +29,8 @@ def test_v5_expressions_use_registered_domain_and_normalized_path():
 ])
 def test_safe_browsing_lookup_and_fallback(variant, expected):
     calls = 0
-    target = parse_url("https://example.com/login")
-    digest = sha256(b"example.com/login").digest()
+    target = parse_url("example.com/login?label=%2523fragment", allow_domain=True)
+    digest = sha256(b"example.com/login?label=%23fragment").digest()
 
     def transport(request):
         nonlocal calls
@@ -38,6 +38,7 @@ def test_safe_browsing_lookup_and_fallback(variant, expected):
         assert str(request.url.copy_with(query=None)) == ENDPOINT
         assert request.headers["x-goog-api-key"] == "mock-key"
         assert not request.content
+        assert "fragment" not in str(request.url)
         assert {name for name, _ in request.url.params.multi_items()} == {"hashPrefixes"}
         assert {b64decode(value) for value in request.url.params.get_list("hashPrefixes")} == {
             item[:4] for item in url_hashes(target)

@@ -5,9 +5,10 @@ from dataclasses import dataclass
 from hashlib import sha256
 from secrets import token_urlsafe
 from time import monotonic
+from typing import Generic, TypeVar
 
 from .ai_schema import AIOffer
-from .ai_analyst import AnalystInput
+T = TypeVar("T")
 
 TTL_SECONDS = 60
 PER_SUBJECT_LIMIT = 4
@@ -21,8 +22,8 @@ class Binding:
 
 
 @dataclass(frozen=True, slots=True, repr=False)
-class Pending:
-    assessment: AnalystInput
+class Pending(Generic[T]):
+    assessment: T
     binding: Binding
     expires: float
 
@@ -31,9 +32,9 @@ def digest(value: str) -> str:
     return sha256(value.encode()).hexdigest()
 
 
-class ExplanationTickets:
+class ExplanationTickets(Generic[T]):
     def __init__(self):
-        self.pending: dict[str, Pending] = {}
+        self.pending: dict[str, Pending[T]] = {}
         self.admissions: deque[tuple[float, str]] = deque()
 
     def prune(self, now: float) -> None:
@@ -43,7 +44,7 @@ class ExplanationTickets:
         while self.admissions and self.admissions[0][0] <= now:
             self.admissions.popleft()
 
-    def issue(self, assessment: AnalystInput, binding: Binding) -> AIOffer:
+    def issue(self, assessment: T, binding: Binding) -> AIOffer:
         now = monotonic()
         self.prune(now)
         if (len(self.admissions) >= GLOBAL_LIMIT
@@ -55,7 +56,7 @@ class ExplanationTickets:
         self.pending[digest(token)] = Pending(assessment, binding, expiry)
         return AIOffer(status="pending", ticket=token)
 
-    def consume(self, token: str, binding: Binding) -> AnalystInput | None:
+    def consume(self, token: str, binding: Binding) -> T | None:
         self.prune(monotonic())
         key = digest(token)
         item = self.pending.get(key)

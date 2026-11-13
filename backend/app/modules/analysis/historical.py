@@ -16,16 +16,20 @@ from uuid import UUID
 import httpx
 
 from .schemas import ProviderCheck
+from .ai_analyst import PRIVATE_SEGMENTS, url_for_analyst
 from .url import UrlTarget, parse_url
 
 VT = "https://www.virustotal.com/api/v3/urls/"
+VT_FILES = "https://www.virustotal.com/api/v3/files/"
 URLSCAN = "https://urlscan.io/api/v1/search"
+URLSCAN_RESULT = "https://urlscan.io/api/v1/result/"
 DNS = "https://dns.google/resolve"
 RDAP = {
     "com": "https://rdap.verisign.com/com/v1/domain/",
     "net": "https://rdap.verisign.com/net/v1/domain/",
 }
 MAX_BODY = 256 * 1024
+SHA256 = re.compile(r"[0-9a-f]{64}")
 
 
 def timestamp(value: object) -> datetime | None:
@@ -57,7 +61,7 @@ class ReadOnlyLookup:
         self.cache: OrderedDict[bytes, tuple[float, ProviderCheck]] = OrderedDict()
         self.cache_secret = token_bytes(32)
 
-    async def get(self, endpoint: str, cache_input: str, parse: Callable[[dict], ProviderCheck], *, params=None, headers=None):
+    async def get(self, endpoint: str, cache_input: str, parse: Callable[[dict], ProviderCheck], *, params=None, headers=None, max_body=MAX_BODY, json_body=None):
         key = digest(self.cache_secret, cache_input.encode(), "sha256")
         now = monotonic()
         cached = self.cache.pop(key, None)
@@ -73,8 +77,10 @@ class ReadOnlyLookup:
         async with self.gate:
             self.calls.append(now)
             try:
-                async with asyncio.timeout(1.7), self.client.stream(
-                    "GET", endpoint, params=params, headers={"Accept-Encoding": "identity", **(headers or {})},
+                timeout = 1.7 if self.name == "DNS" else 2.8
+                async with asyncio.timeout(timeout), self.client.stream(
+                    "POST" if json_body is not None else "GET", endpoint, params=params, json=json_body,
+                    headers={"Accept-Encoding": "identity", **(headers or {})},
                     follow_redirects=False,
                 ) as response:
                     status = response.status_code
@@ -83,17 +89,19 @@ class ReadOnlyLookup:
                         seconds = int(reset) if reset.isascii() and reset.isdecimal() and len(reset) < 8 else 60
                         self.cooldown = monotonic() + min(max(seconds, 1), 86400)
                     errors = {401: "unauthorized", 403: "unauthorized", 429: "rate_limited"}
-                    if status == 404 and self.name in {"VirusTotal", "RDAP"}:
+                    if status == 404 and self.name in {"VirusTotal", "VirusTotal AI", "RDAP"}:
                         result = ProviderCheck(provider=self.name, status="not_found")
                     elif status != 200:
                         return ProviderCheck(provider=self.name, status=errors.get(status, "unavailable"))
                     else:
                         if response.headers.get("Content-Encoding", "identity") != "identity":
                             raise ValueError("Unexpected response compression")
+                        if json_body is not None and response.headers.get("Content-Type", "").partition(";")[0].strip().lower() != "application/json":
+                            raise ValueError("Expected JSON response")
                         data = bytearray()
                         async for chunk in response.aiter_bytes(chunk_size=8192):
                             data.extend(chunk)
-                            if len(data) > MAX_BODY:
+                            if len(data) > max_body:
                                 return ProviderCheck(provider=self.name, status="error")
                         payload = json.loads(data)
                         if not isinstance(payload, dict):
@@ -112,24 +120,43 @@ class ReadOnlyLookup:
         return result
 
 
+def shareable_archive_url(target: UrlTarget) -> bool:
+    # Encoded paths can conceal secrets and query strings. Only share plain, screened paths.
+    return bool(target.registered_domain and not target.scheme_assumed and target.port is None
+                and "?" not in target.normalized_url and re.fullmatch(r"/[A-Za-z0-9._~/-]*", target.path)
+                and url_for_analyst(target.normalized_url) == target.normalized_url
+                and not {part.lower() for part in target.path.split("/")} & (PRIVATE_SEGMENTS | {"private"}))
+
+
 class VirusTotal:
     def __init__(self, client: httpx.AsyncClient, key: str):
         self.reader = ReadOnlyLookup(client, "VirusTotal", minute=4)
         self.headers = {"x-apikey": key, "Accept": "application/json"}
 
     async def lookup(self, target: UrlTarget):
-        if (target.scheme_assumed or target.path != "/" or "?" in target.normalized_url
-                or target.port is not None or target.hostname != target.registered_domain):
+        if not shareable_archive_url(target):
             return ProviderCheck(provider="VirusTotal", status="skipped",
-                                 limitations=["Pencarian ini hanya menerima URL beranda dengan domain terdaftar dan skema eksplisit."])
+                                 limitations=["Lookup URL memerlukan skema eksplisit dan path yang lolos penyaringan data sensitif. Query tidak dibagikan."])
         identifier = urlsafe_b64encode(target.normalized_url.encode()).decode("ascii").rstrip("=")
         return await self.reader.get(VT + identifier, identifier, self.parse, headers=self.headers)
 
+    async def lookup_file(self, metadata: ProviderCheck) -> ProviderCheck:
+        file_hash = metadata.record_id
+        if metadata.status != "found" or not file_hash or not SHA256.fullmatch(file_hash):
+            raise ValueError("Expected archived file hash")
+        result = await self.reader.get(VT_FILES + file_hash, f"file:{file_hash}",
+                                       lambda payload: self.parse(payload, file_hash), headers=self.headers)
+        return result.model_copy(update={
+            "provider": "VirusTotal File", "specificity": "file_hash",
+            "archive_observed_at": metadata.observed_at,
+            "limitations": [*result.limitations, "Hash berasal dari arsip urlscan.io. Isi unduhan dapat berubah sejak arsip dibuat."],
+        })
+
     @staticmethod
-    def parse(payload):
+    def parse(payload, file_hash=None):
         data = payload["data"]
-        if data["type"] != "url":
-            raise ValueError("Expected URL report")
+        if data["type"] != ("file" if file_hash else "url") or (file_hash and data.get("id") != file_hash):
+            raise ValueError("Unexpected VirusTotal report identity")
         attributes = data["attributes"]
         stats = attributes.get("last_analysis_stats")
         counts = {}
@@ -145,14 +172,18 @@ class VirusTotal:
             verdict = "malicious"
         elif counts.get("suspicious"):
             verdict = "suspicious"
-        elif counts.get("malicious") == counts.get("suspicious") == 0 and sum(counts.values()):
+        elif counts.get("malicious") == counts.get("suspicious") == 0 and counts.get("harmless", 0):
             verdict = "no_detection"
         observed = timestamp(attributes.get("last_analysis_date"))
+        engines = attributes.get("last_analysis_results")
+        engine_count = len(engines) if isinstance(engines, dict) and 0 < len(engines) <= 10000 else None
         category_object = attributes.get("categories", {})
         categories = safe_categories(list(category_object.values())) if isinstance(category_object, dict) else []
         return ProviderCheck(
-            provider="VirusTotal", status="found", specificity="exact_url", observed_at=observed,
+            provider="VirusTotal File" if file_hash else "VirusTotal", status="found",
+            specificity="file_hash" if file_hash else "exact_url", observed_at=observed,
             freshness=freshness(observed), verdict=verdict, counts=counts, categories=categories,
+            engine_count=engine_count,
             limitations=["Laporan historis. Hitungan mesin tidak menjamin keamanan atau membuktikan konsensus independen."],
         )
 
@@ -169,15 +200,90 @@ class Urlscan:
         self.reader = ReadOnlyLookup(client, "urlscan.io", minute=6)
         self.headers = {"api-key": key, "Accept": "application/json"}
 
-    async def lookup(self, target: UrlTarget):
+    async def lookup_download(self, target: UrlTarget) -> ProviderCheck:
+        filters = "task.visibility:public AND files.sha256:*"
+
+        async def search(query: str) -> ProviderCheck:
+            return await self.reader.get(
+                URLSCAN, f"download:{query}\n{target.normalized_url}",
+                lambda payload: self.parse_download(payload, target),
+                params={"q": query, "size": "10"}, headers=self.headers,
+            )
+
+        if shareable_archive_url(target):
+            exact = await search(f'files.url:"{target.normalized_url}" AND {filters}')
+            if exact.status not in {"not_found", "unavailable", "unauthorized", "error"}:
+                return exact
+        return await search(f'domain:"{target.hostname}" AND {filters}')
+
+    @staticmethod
+    def parse_download(payload, target: UrlTarget) -> ProviderCheck:
+        rows = payload["results"]
+        if not isinstance(rows, list):
+            raise ValueError("Expected download archive results")
+        candidates = []
+        for row in rows[:10]:
+            if not isinstance(row, dict):
+                continue
+            task, files = row.get("task"), row.get("files")
+            if not isinstance(task, dict) or task.get("visibility") != "public" or not isinstance(files, list):
+                continue
+            observed = timestamp(task.get("time"))
+            if freshness(observed) == "unknown":
+                continue
+            for entry in files[:32]:
+                if not isinstance(entry, dict) or entry.get("state") != "completed":
+                    continue
+                raw, file_hash = entry.get("url"), entry.get("sha256")
+                if not isinstance(raw, str) or len(raw) > 4096 or not isinstance(file_hash, str):
+                    continue
+                try:
+                    same_url = parse_url(raw).normalized_url == target.normalized_url
+                except ValueError:
+                    continue
+                if same_url and SHA256.fullmatch(file_hash):
+                    candidates.append((observed, file_hash))
+        if not candidates:
+            return ProviderCheck(provider="urlscan.io", status="not_found")
+        observed, file_hash = max(candidates)
+        if len({value for date, value in candidates if date == observed}) > 1:
+            return ProviderCheck(provider="urlscan.io", status="error")
+        return ProviderCheck(provider="urlscan.io", status="found", observed_at=observed, record_id=file_hash)
+
+    async def lookup(self, target: UrlTarget, *, domain_only: bool = False):
         domain = target.registered_domain
         if not domain:
             return ProviderCheck(provider="urlscan.io", status="skipped")
         query = f'(page.apexDomain:"{domain}" OR task.apexDomain:"{domain}") AND task.visibility:public'
-        return await self.reader.get(
-            URLSCAN, target.normalized_url, lambda payload: self.parse(payload, target),
-            params={"q": query, "size": "10"}, headers=self.headers,
-        )
+        if not domain_only and shareable_archive_url(target):
+            exact = await self.search(f'task.url.keyword:"{target.normalized_url}" AND task.visibility:public', target)
+            if exact.status == "found" and exact.specificity == "exact_url":
+                return await self.with_verdict(exact, target)
+            if exact.status not in {"found", "not_found"}:
+                return exact
+        return await self.with_verdict(await self.search(query, target), target)
+
+    async def search(self, query: str, target: UrlTarget) -> ProviderCheck:
+        return await self.reader.get(URLSCAN, f"{query}\n{target.normalized_url}",
+                                     lambda payload: self.parse(payload, target),
+                                     params={"q": query, "size": "10"}, headers=self.headers)
+
+    async def with_verdict(self, result: ProviderCheck, target: UrlTarget) -> ProviderCheck:
+        if result.specificity != "exact_url" or not result.record_id or result.verdict != "unknown":
+            return result
+
+        def parse_detail(payload):
+            detail = self.parse({"results": [payload]}, target)
+            if detail.record_id != result.record_id or detail.specificity != "exact_url":
+                raise ValueError("Unexpected urlscan archive identity")
+            return detail
+
+        detail = await self.reader.get(f"{URLSCAN_RESULT}{result.record_id}/", f"result:{result.record_id}",
+                                       parse_detail, headers=self.headers, max_body=2 * 1024 * 1024)
+        if detail.status == "found":
+            return detail
+        return result.model_copy(update={"limitations": [*result.limitations,
+            "Detail verdict arsip tidak tersedia saat pemeriksaan ini."]})
 
     @staticmethod
     def parse(payload, target):

@@ -16,7 +16,7 @@ export function ScanSidebar() {
       <div className="sidebar-panel">
         <div className="sidebar-label"><span className="section-label">KEAMANAN DATA</span><Fingerprint size={20} aria-hidden="true" /></div>
         <h3>Privasi tetap utama.</h3>
-        <p>Hindari mengirim kata sandi atau OTP. Riwayat pemeriksaan nantinya disimpan hanya dengan persetujuan pengguna.</p>
+        <p>Hindari mengirim kata sandi atau OTP. Kamu bisa mengatur penyimpanan Riwayat dari akunmu.</p>
       </div>
       <div className="sidebar-panel sidebar-reminder">
         <div className="sidebar-label"><span className="section-label">PERLU DIINGAT</span><CircleAlert size={20} aria-hidden="true" /></div>

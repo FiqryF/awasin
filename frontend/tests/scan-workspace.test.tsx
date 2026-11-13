@@ -18,7 +18,7 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn())
   window.open = vi.fn()
 })
-afterEach(async () => { if (cleanup) await act(async () => cleanup?.()); cleanup = undefined; vi.unstubAllGlobals() })
+afterEach(async () => { if (cleanup) await act(async () => cleanup?.()); cleanup = undefined; vi.unstubAllGlobals(); vi.unstubAllEnvs() })
 async function mount(mode: string, identity: Identity | null = null) {
   const host = document.createElement('div'); document.body.append(host)
   const root = createRoot(host)
@@ -88,7 +88,7 @@ function fullInspectionOption(host: HTMLElement) {
   return host.querySelector<HTMLInputElement>('input[aria-describedby="scan-consent-help"]')!
 }
 
-it('loads the validated Mistral card after rendering the verdict and consumes consent once', async () => {
+it('loads the validated Nemotron fallback after rendering the verdict and consumes consent once', async () => {
   let finish!: (response: Response) => void
   vi.mocked(fetch).mockResolvedValueOnce(aiScan({ status: 'pending', ticket: aiTicket }))
     .mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
@@ -102,43 +102,57 @@ it('loads the validated Mistral card after rendering the verdict and consumes co
   expect(document.activeElement).toBe(consent)
   await act(async () => consent.click())
   await submit(host)
-  expect(host.textContent).toContain('Ada indikasi mencurigakan')
-  expect(host.querySelector('.url-ai-report [role="status"]')?.textContent).toContain('sedang menyiapkan')
+  expect(host.querySelector('.url-result-card h4')?.textContent).toBe('Waspada — Risiko sedang')
+  expect(host.querySelector('.url-result-card')?.textContent).toContain('Menunggu analisis Mistral')
   expect(consent.checked).toBe(false)
   const [scan, ai] = vi.mocked(fetch).mock.calls
   expect(JSON.parse(String(scan[1]?.body))).toEqual({
-    mode: 'link', url: 'https://example.org/', threat_lookup_consent: true, enhanced_lookup_consent: true, ai_consent: true,
+    mode: 'link', url: 'https://example.org/', threat_lookup_consent: true, enhanced_lookup_consent: true,
+    url_ai_consent: true, openrouter_fallback_consent: true,
   })
-  expect(ai[0]).toMatch(/\/analysis\/explanation$/)
   expect(JSON.parse(String(ai[1]?.body))).toEqual({ ticket: aiTicket, consent: true })
-  await act(async () => finish(new Response(JSON.stringify({
-    status: 'completed', summary: 'Ringkasan berdasarkan bukti.', limitations: ['Konten belum diperiksa.'],
-    findings: [{ evidence_ids: ['EV-001'], source: 'Google Safe Browsing', explanation: 'Pemeriksaan dilewati.' }],
-    recommendations: ['Periksa alamat resmi.'],
-  }))))
-  expect(host.querySelector('.url-ai-report')?.textContent).toContain('Pemeriksaan dilewati.')
-  expect(host.querySelector('.url-ai-report')?.textContent).not.toContain('EV-001')
-  expect(host.querySelector('.url-technical:not([open])')?.textContent).toContain('Google Safe Browsing · EV-001')
-  expect(host.querySelectorAll('.url-actions')).toHaveLength(1)
-  expect(host.textContent).toContain('Ada indikasi mencurigakan')
+  await act(async () => finish(Response.json({
+    status: 'completed', analyst: 'nemotron', risk: 'high', summary: 'Ringkasan berdasarkan bukti.',
+    findings: [], limitations: [], recommendations: [],
+  })))
+  const card = host.querySelector('.url-result-card')!
+  expect(card.textContent).toContain('Penilaian Nemotron tervalidasi')
+  expect(card.textContent).toContain('Ringkasan berdasarkan bukti.')
+  expect(card.querySelector('h4')?.textContent).toBe('Berbahaya — Risiko tinggi')
+  expect(host.querySelector('.url-report')?.children).toHaveLength(1)
   expect(fetch).toHaveBeenCalledTimes(2)
 })
 
 it.each([
-  ['validation_failed', 'tidak lolos pemeriksaan bukti'],
-  ['timeout', 'melewati batas waktu'],
-  ['rate_limited', 'Batas permintaan'],
-  ['unavailable', 'belum tersedia'],
-  ['disabled', 'dinonaktifkan'],
-])('preserves deterministic output when Mistral is %s', async (status, message) => {
-  vi.mocked(fetch).mockResolvedValueOnce(aiScan(status === 'disabled' ? { status } : { status: 'pending', ticket: aiTicket }))
-  if (status !== 'disabled') vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ status })))
+  ['unknown', 'Belum dapat dipastikan'], ['low', 'Aman'],
+  ['medium', 'Waspada — Risiko sedang'], ['high', 'Berbahaya — Risiko tinggi'],
+])('shows the final AI verdict %s in a single card', async (risk, label) => {
+  vi.mocked(fetch).mockResolvedValueOnce(aiScan({ status: 'pending', ticket: aiTicket }))
+    .mockResolvedValueOnce(Response.json({
+      status: 'completed', risk, summary: 'Ringkasan AI. Temuan ini belum memastikan bahwa tautan tersebut merupakan penipuan.',
+      findings: [], limitations: [], recommendations: [],
+    }))
   const host = await mount('link')
   await enterText(host.querySelector<HTMLInputElement>('#scan-text')!, 'https://example.org/')
   await act(async () => fullInspectionOption(host).click())
   await submit(host)
-  expect(host.querySelector('.url-ai-report [role="status"]')?.textContent).toContain(message)
-  expect(host.textContent).toContain('Ada indikasi mencurigakan')
+  const card = host.querySelector('.url-result-card')!
+  expect(card.getAttribute('data-risk')).toBe(risk)
+  expect(card.querySelector('h4')?.textContent).toBe(label)
+  expect(card.textContent).toContain('Ringkasan AI.')
+  expect(card.textContent).not.toContain('Temuan ini belum memastikan')
+})
+
+it.each(['validation_failed', 'timeout', 'rate_limited', 'unavailable', 'disabled'])('keeps the local result when AI is %s', async status => {
+  vi.mocked(fetch).mockResolvedValueOnce(aiScan(status === 'disabled' ? { status } : { status: 'pending', ticket: aiTicket }))
+  if (status !== 'disabled') vi.mocked(fetch).mockResolvedValueOnce(Response.json({ status }))
+  const host = await mount('link')
+  await enterText(host.querySelector<HTMLInputElement>('#scan-text')!, 'https://example.org/')
+  await act(async () => fullInspectionOption(host).click())
+  await submit(host)
+  expect(host.querySelector('.url-result-card')?.textContent).toContain(status === 'rate_limited'
+    ? 'Batas permintaan AI tercapai' : 'Analisis AI belum menghasilkan keputusan')
+  expect(host.querySelector('.url-result-card h4')?.textContent).toBe('Waspada — Risiko sedang')
   expect(fetch).toHaveBeenCalledTimes(status === 'disabled' ? 1 : 2)
 })
 
@@ -163,62 +177,16 @@ it('cancels stale AI results on edit and sends no AI request for the next uncons
   expect(JSON.parse(String(vi.mocked(fetch).mock.calls[2][1]?.body))).toEqual({ mode: 'link', url: 'https://example.com/' })
 })
 
-it('defaults to an AWASIN-only scan and allows a specific provider choice in data details', async () => {
-  vi.mocked(fetch).mockResolvedValueOnce(aiScan()).mockResolvedValueOnce(aiScan())
+it('defaults to local inspection and presents one optional consent checkbox', async () => {
+  vi.mocked(fetch).mockResolvedValueOnce(aiScan())
   const host = await mount('link')
   await enterText(host.querySelector<HTMLInputElement>('#scan-text')!, 'https://example.org/')
-  const full = fullInspectionOption(host)
-  const details = host.querySelector<HTMLDetailsElement>('.scan-consent-details')!
-  expect(full.checked).toBe(false)
-  expect(details.open).toBe(false)
+  expect(fullInspectionOption(host).checked).toBe(false)
+  expect(host.querySelector('#panel-link details')).toBeNull()
+  expect(host.textContent).toContain('AWASIN bisa saja salah.')
   await submit(host)
   expect(fetch).toHaveBeenCalledTimes(1)
   expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({ mode: 'link', url: 'https://example.org/' })
-  await act(async () => { details.open = true })
-  expect(details.textContent).toContain('termasuk path')
-  expect(details.textContent).toContain('Base64')
-  expect(details.textContent).toContain('Google Public DNS')
-  const google = details.querySelector<HTMLInputElement>('input[aria-describedby="scan-data-threat_lookup_consent"]')!
-  await act(async () => google.click())
-  expect(full.indeterminate).toBe(true)
-  await submit(host)
-  expect(fetch).toHaveBeenCalledTimes(2)
-  expect(JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body))).toEqual({
-    mode: 'link', url: 'https://example.org/', threat_lookup_consent: true,
-  })
-  expect(google.checked).toBe(false)
-  expect(full.indeterminate).toBe(false)
-})
-
-it('keeps Detector consent separate and renders validated findings without changing the verdict', async () => {
-  vi.stubEnv('VITE_AI_THREAT_DETECTOR_PROVIDER', 'Detector fixture')
-  try {
-    const fixture = await aiScan().json()
-    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({
-      ...fixture, detector: { status: 'completed', findings: [{
-        assessment: 'suspected', description: 'Pola akun patut diperiksa.', feature_ids: ['UF-01'],
-      }] },
-    })))
-    const host = await mount('link')
-    await enterText(host.querySelector<HTMLInputElement>('#scan-text')!, 'https://example.org/')
-    const detector = host.querySelector<HTMLInputElement>('input[aria-describedby="scan-detector-privacy"]')!
-    expect(detector.checked).toBe(false)
-    await act(async () => fullInspectionOption(host).click())
-    expect(detector.checked).toBe(false)
-    await act(async () => fullInspectionOption(host).click())
-    await act(async () => detector.click())
-    await submit(host)
-    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({
-      mode: 'link', url: 'https://example.org/', detector_consent: true,
-    })
-    const region = host.querySelector('[aria-label="Analisis AI karakteristik tautan"]')!
-    expect(region.textContent).toContain('Dugaan AI')
-    expect(region.textContent).toContain('Konten website belum diperiksa secara langsung.')
-    expect(host.querySelector('.url-result-card')?.getAttribute('data-risk')).toBe('medium')
-    expect(fetch).toHaveBeenCalledTimes(1)
-  } finally {
-    vi.unstubAllEnvs()
-  }
 })
 
 it.each([
@@ -248,6 +216,8 @@ it.each([
         { ...baseCheck, provider: 'VirusTotal', status: vtStatus,
           ...(matched ? { observed_at: '2026-11-10T12:00:00Z', specificity: 'exact_url', freshness: 'recent',
             verdict: 'malicious', counts: { malicious: 3, suspicious: 1 } } : {}) },
+        { ...baseCheck, provider: 'VirusTotal AI', status: 'found', observed_at: '2026-11-10T12:00:00Z',
+          specificity: 'exact_url', freshness: 'recent', verdict: matched ? 'malicious' : 'no_detection' },
         { ...baseCheck, provider: 'urlscan.io', status: 'found', observed_at: '2025-11-11T12:00:00Z',
           specificity: 'related_domain', verdict: 'unknown', freshness: 'stale' },
         { ...baseCheck, provider: 'DNS', status: 'found', details: ['A 93.184.216.34'] },
@@ -267,26 +237,12 @@ it.each([
   const report = host.querySelector('.url-report')!
   expect(report, host.textContent ?? '').not.toBeNull()
   expect(report.getAttribute('aria-label')).toBe('Hasil Link & Website Inspector')
-  expect(report.querySelector('.url-website h4')?.textContent).toBe('example.org')
+  expect(report.children).toHaveLength(1)
   expect(report.textContent).toContain(matched ? 'Ancaman ditemukan' : 'Belum dapat dipastikan')
-  const coverage = { match: '4 dari 5', no_match: '4 dari 5', timeout: '2 dari 5', unsupported: '3 dari 3' }
-  expect(report.querySelector('.url-result-card')?.textContent).toContain(`${coverage[status as keyof typeof coverage]} sumber luar memberikan hasil.`)
-  expect(report.textContent).not.toMatch(/\d\s*%/)
-  expect(report.querySelector('.url-findings ol')?.textContent).toContain('Path menyebut login.')
-  expect(report.querySelector('.url-findings ol')?.textContent).toContain('Sertifikat dan koneksi ke situs belum diperiksa.')
-  expect(report.textContent).toContain(providerText)
-  expect(report.textContent).toContain('Domain terkait')
-  expect(report.textContent).toContain('Lebih dari 30 hari')
-  expect(report.textContent).toContain('A 93.184.216.34')
-  expect(report.textContent).toContain(status === 'unsupported' ? 'Dilewati' : 'Provider belum tersedia')
-  expect(report.textContent).toContain(matched ? 'Deteksi berbahaya 3'
-    : vtStatus === 'not_found' ? 'Laporan historis tidak ditemukan' : 'Batas permintaan tercapai')
-  if (matched) expect(report.querySelector('.url-result-card')?.textContent).toContain('Rekayasa sosial atau phishing')
-  expect(report.textContent).toContain('Konten halaman website tidak diperiksa.')
-  expect(report.querySelector('details:not([open]) summary')?.textContent).toContain('Lihat detail pemeriksaan')
-  expect(report.querySelector('a')).toBeNull()
-  await enterText(host.querySelector<HTMLInputElement>('#scan-text')!, 'https://example.org/other')
+  const coverage = { match: '5 dari 6', no_match: '5 dari 6', timeout: '3 dari 6', unsupported: '4 dari 4' }
+  expect(report.querySelector('.url-result-card')?.textContent).toContain(`${coverage[status as keyof typeof coverage]} pemeriksaan sumber luar selesai.`)
   expect(consent.checked).toBe(false)
+  await enterText(host.querySelector<HTMLInputElement>('#scan-text')!, 'https://example.net/')
   expect(host.querySelector('.url-report')).toBeNull()
 })
 it.each(['link', 'message', 'website', 'image', 'video'])('does not fabricate or save analysis after valid %s input', async mode => {
@@ -367,12 +323,15 @@ it.each(['fixture-owner', 'different-user'])('uses the session only when it belo
     profile: { id: 'fixture-owner', display_name: 'Fixture' },
   }
   mock.getSession.mockResolvedValueOnce({ data: { session: { user: { id: sessionId }, access_token: 'fixture-token' } }, error: null })
-  vi.mocked(fetch).mockResolvedValueOnce(unavailable('link'))
+  const result = await aiScan().json()
+  vi.mocked(fetch).mockResolvedValueOnce(Response.json({ ...result, history_status: 'saved' }))
   const host = await mount('link', identity)
   await enterText(host.querySelector<HTMLInputElement>('#scan-text')!, 'https://example.com')
   await submit(host)
   if (sessionId === identity.id) {
     expect(new Headers(vi.mocked(fetch).mock.calls[0][1]?.headers).get('Authorization')).toBe('Bearer fixture-token')
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body)).history_consent).toBe(true)
+    expect(host.querySelector('.url-result-card')?.textContent).toContain('Tersimpan di Riwayat.')
   } else {
     expect(fetch).not.toHaveBeenCalled()
     expect(host.querySelector('[role="alert"]')?.textContent).toContain('Sesi berakhir')

@@ -16,6 +16,15 @@ health check, dokumentasi OpenAPI, CORS, logging, dan penanganan error.
 Engine analisis keamanan belum tersedia. Operasi data memerlukan konfigurasi
 Supabase serta migrasi yang sesuai dan tidak menghasilkan sukses palsu bila gagal.
 
+## Riwayat Link Inspector
+
+Dengan migrasi `scan_reports` yang sudah terpasang, atur `SUPABASE_HISTORY_SECRET_KEY`
+ke secret key `sb_secret_…` dari proyek Supabase yang sama, hanya pada environment backend.
+Muat ulang backend setelah mengaturnya. Ringkasan dan domain terdaftar disimpan
+untuk akun yang masuk jika pengaturan penyimpanan aktif. Pembacaan dan penghapusan
+riwayat tetap memakai sesi pengguna. Jika kunci belum tersedia atau penulisan gagal,
+Link Inspector tetap menampilkan hasil dan status penyimpanan.
+
 ## Teknologi dan struktur
 
 Python **3.12+**, FastAPI/Pydantic, Pydantic Settings, Uvicorn, pytest dan HTTPX.
@@ -58,12 +67,15 @@ cd backend
 py -3.13 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade "pip>=26.2,<27"
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
-Copy-Item .env.example .env
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
 .\.venv\Scripts\python.exe -m app
 ```
 
 Gunakan `py -3.12` jika Python 3.12 yang terpasang. Aktivasi virtual environment
 tidak wajib; perintah di atas tidak memerlukan perubahan execution policy.
+Untuk proyek yang sudah memiliki `.venv`, lewati pembuatannya dan jalankan kembali
+`.\.venv\Scripts\python.exe -m pip install -e ".[dev]"` setelah dependency berubah.
+Panduan menjalankan kedua layanan dan membaca error: [RUN_LOCAL.md](../RUN_LOCAL.md).
 
 ## Setup Ubuntu (Bash)
 
@@ -183,6 +195,17 @@ tanpa environment Supabase/database/JWT. Route pemicu error hanya dipasang di te
 Pada kombinasi Starlette 1.9.0 dan HTTPX 0.28.1 yang diuji, TestClient memberi
 peringatan deprecation agar beralih ke HTTPX2. Test tetap lulus; tidak ditambahkan
 dependency baru hanya untuk menghilangkan peringatan ini.
+
+## VirusTotal AI untuk Link Inspector
+
+Set `VTAI_AGENT_TOKEN` sebagai secret di environment backend. Pada development,
+AWASIN juga dapat membaca token yang sudah ada di `~/.config/vtai/token`.
+Gunakan `VTAI_ENABLED=false` untuk menonaktifkan lookup.
+
+Dengan persetujuan pemeriksaan tambahan, backend mencari laporan historis untuk
+URL publik yang lolos penyaringan privasi. Hasil termasuk cakupan mesin, tanggal,
+dan statistik yang diteruskan sebagai bukti ke analis. AWASIN membaca laporan
+yang tersedia melalui endpoint lookup. URL dengan query atau path sensitif dilewati.
 
 ## Batasan dan tahap berikutnya
 

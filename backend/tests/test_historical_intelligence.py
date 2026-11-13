@@ -12,6 +12,7 @@ from app.modules.analysis.historical import DomainIntelligence, Urlscan, VirusTo
 from app.modules.analysis.inspect_url import UrlInspector, domain_identity
 from app.modules.analysis.registry import load_registry
 from app.modules.analysis.url import Lookup, parse_url
+from app.modules.analysis.schemas import ProviderCheck
 
 
 def vt_report(malicious=3, date=None):
@@ -20,6 +21,16 @@ def vt_report(malicious=3, date=None):
         "last_analysis_date": date if date is not None else int(datetime.now(UTC).timestamp()),
         "categories": {"example": "test category"},
     }}}
+
+
+def test_virustotal_unrated_engines_do_not_produce_a_clean_verdict():
+    payload = vt_report(malicious=0)
+    attributes = payload["data"]["attributes"]
+    attributes["last_analysis_results"] = {"one": {}, "two": {}}
+    result = VirusTotal.parse(payload)
+    assert result.verdict == "unknown" and result.engine_count == 2
+    attributes["last_analysis_stats"]["harmless"] = 1
+    assert VirusTotal.parse(payload).verdict == "no_detection"
 
 
 @pytest.mark.parametrize(("status", "expected"), [
@@ -33,7 +44,7 @@ def test_vt_read_only_status_and_cache(status, expected):
         requests.append(request)
         assert request.method == "GET" and request.url.host == "www.virustotal.com"
         assert request.headers["x-apikey"] == "vt-mock"
-        identifier = urlsafe_b64encode(b"https://example.com/").decode().rstrip("=")
+        identifier = urlsafe_b64encode(b"https://www.example.com/docs").decode().rstrip("=")
         assert request.url.path == f"/api/v3/urls/{identifier}" and not request.url.query
         if status is None:
             raise httpx.ReadTimeout("fixture", request=request)
@@ -42,9 +53,9 @@ def test_vt_read_only_status_and_cache(status, expected):
     async def run():
         async with httpx.AsyncClient(transport=httpx.MockTransport(transport), follow_redirects=True) as client:
             adapter = VirusTotal(client, "vt-mock")
-            for raw in ("https://example.com/?fixture=secret", "https://example.com/private", "https://one.example.com/", "example.com"):
+            for raw in ("https://example.com/?fixture=secret", "https://example.com/private", "https://one.example.com/reset-password/code", "example.com"):
                 assert (await adapter.lookup(parse_url(raw, allow_domain=True))).status == "skipped"
-            target = parse_url("https://example.com")
+            target = parse_url("https://www.example.com/docs")
             result = await adapter.lookup(target)
             assert result.status == expected
             if status == 200:
@@ -74,7 +85,10 @@ def test_urlscan_public_history(status, rows, expected, specificity):
     def transport(request):
         assert request.method == "GET" and request.url.host == "urlscan.io" and request.url.path == "/api/v1/search"
         assert request.headers["api-key"] == "us-mock"
-        assert request.url.params["q"] == '(page.apexDomain:"example.com" OR task.apexDomain:"example.com") AND task.visibility:public'
+        assert request.url.params["q"] in {
+            'task.url.keyword:"https://example.com/" AND task.visibility:public',
+            '(page.apexDomain:"example.com" OR task.apexDomain:"example.com") AND task.visibility:public',
+        }
         return httpx.Response(status, json={"results": rows})
 
     async def run():
@@ -88,11 +102,142 @@ def test_urlscan_public_history(status, rows, expected, specificity):
     asyncio.run(run())
 
 
+def test_urlscan_loads_exact_public_archive_verdict_by_uuid():
+    record = archive("https://example.com/docs")
+    record_id = record["task"]["uuid"]
+    calls = []
+
+    def transport(request):
+        calls.append(request.url.path)
+        assert request.method == "GET" and request.url.host == "urlscan.io"
+        if request.url.path == "/api/v1/search":
+            assert request.url.params["q"] == 'task.url.keyword:"https://example.com/docs" AND task.visibility:public'
+            return httpx.Response(200, json={"results": [{"task": record["task"]}]})
+        assert request.url.path == f"/api/v1/result/{record_id}/"
+        return httpx.Response(200, json=record)
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(transport)) as client:
+            result = await Urlscan(client, "fixture").lookup(parse_url("https://example.com/docs"))
+            assert (result.status, result.specificity, result.verdict) == ("found", "exact_url", "malicious")
+        assert calls == ["/api/v1/search", f"/api/v1/result/{record_id}/"]
+
+    asyncio.run(run())
+
+
+def test_dns_failure_allows_domain_only_urlscan_without_sending_path():
+    calls = []
+
+    def transport(request):
+        calls.append(request.url.host)
+        if request.url.host == "dns.google":
+            assert request.url.params["name"] == "www.example.com"
+            raise httpx.ReadTimeout("fixture", request=request)
+        if request.url.host == "rdap.verisign.com":
+            return httpx.Response(404)
+        assert request.url.host == "urlscan.io"
+        assert request.url.params["q"] == '(page.apexDomain:"example.com" OR task.apexDomain:"example.com") AND task.visibility:public'
+        return httpx.Response(200, json={"results": []})
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(transport)) as client:
+            inspector = UrlInspector(virustotal=VirusTotal(client, "fixture"), urlscan=Urlscan(client, "fixture"),
+                                     domain_intelligence=DomainIntelligence(client))
+            report = (await inspector.inspect(parse_url("https://www.example.com/docs"), enhanced_consent=True)).url_report
+            checks = {check.provider: check.status for check in report.supplementary_checks}
+            assert checks["VirusTotal"] == "skipped" and checks["urlscan.io"] == "not_found"
+            assert "www.virustotal.com" not in calls
+
+    asyncio.run(run())
+
+
 class GoogleNoMatch:
     name = "Google Safe Browsing"
 
     async def lookup_url(self, _target):
         return Lookup("no_match", datetime.now(UTC))
+
+
+def test_public_download_search_targets_file_url_and_rejects_other_paths():
+    url = "https://example.org/releases/download.zip"
+    target = parse_url(url)
+    calls = []
+
+    def transport(request):
+        query = request.url.params["q"]
+        calls.append(query)
+        assert query.startswith(f'files.url:"{url}" AND ')
+        return httpx.Response(200, json={"results": [{
+            "task": {"time": datetime.now(UTC).isoformat(), "visibility": "public"},
+            "files": [
+                {"url": url + ".old", "sha256": "b" * 64, "state": "completed"},
+                {"url": url, "sha256": "a" * 64, "state": "completed"},
+            ],
+        }]})
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(transport)) as client:
+            result = await Urlscan(client, "fixture").lookup_download(target)
+        assert result.status == "found" and result.record_id == "a" * 64
+        assert len(calls) == 1
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize(("archived_suffix", "file_status", "malicious", "harmless", "stale", "expected_status", "expected_risk"), [
+    ("?version=1", 200, 3, 0, False, "found", "medium"),
+    ("?version=1", 200, 0, 50, False, "found", "low"),
+    ("?version=1", 200, 0, 0, False, "found", "unknown"),
+    ("?version=1", 200, 0, 50, True, "found", "unknown"),
+    ("?version=1", 200, 1, 50, False, "found", "unknown"),
+    ("?version=2", 200, 3, 0, False, "not_found", "unknown"),
+    ("?version=1", 404, 3, 0, False, "not_found", "unknown"),
+])
+def test_download_hash_lookup_requires_the_exact_archived_url(
+    archived_suffix, file_status, malicious, harmless, stale, expected_status, expected_risk,
+):
+    url = "https://example.org/download.zip"
+    file_hash = "a" * 64
+    calls = []
+
+    def transport(request):
+        assert request.method == "GET"
+        assert "version" not in str(request.url)
+        host = request.url.host
+        calls.append(host)
+        if host == "dns.google":
+            return httpx.Response(200, json={"Status": 0, "Answer": [{"type": 1, "data": "93.184.216.34"}]})
+        if host == "urlscan.io":
+            assert request.url.path == "/api/v1/search"
+            if "files.sha256:*" not in request.url.params["q"]:
+                return httpx.Response(200, json={"results": []})
+            return httpx.Response(200, json={"results": [{
+                "task": {"time": datetime.now(UTC).isoformat(), "visibility": "public"},
+                "files": [{"url": url + archived_suffix, "sha256": file_hash, "state": "completed"}],
+            }]})
+        assert host == "www.virustotal.com" and request.url.path == f"/api/v3/files/{file_hash}"
+        report = vt_report(malicious, date=1 if stale else None)
+        report["data"].update(type="file", id=file_hash)
+        report["data"]["attributes"]["last_analysis_stats"]["harmless"] = harmless
+        return httpx.Response(file_status, json=report)
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(transport)) as client:
+            inspector = UrlInspector(GoogleNoMatch(), virustotal=VirusTotal(client, "fixture"),
+                                     urlscan=Urlscan(client, "fixture"), domain_intelligence=DomainIntelligence(client))
+            target = parse_url(url + "?version=1")
+            await inspector.inspect(target)
+            assert calls == []
+            result = await inspector.inspect(target, True, True)
+        check = next(item for item in result.url_report.supplementary_checks if item.provider == "VirusTotal File")
+        assert (check.status, result.risk) == (expected_status, expected_risk)
+        assert result.url_report.identity_status == "insufficient_evidence"
+        assert calls.count("www.virustotal.com") == int(archived_suffix == "?version=1")
+        assert file_hash not in result.model_dump_json()
+        if expected_status == "found":
+            assert check.archive_observed_at and check.observed_at and check.specificity == "file_hash"
+
+    asyncio.run(run())
 
 
 @pytest.mark.parametrize(("dns_value", "vt_status", "expected_risk"), [
@@ -148,6 +293,56 @@ def test_rdap_exposes_only_public_domain_metadata():
     }, "example.com")
     assert result.details == ["Terdaftar 2020-01-01", "Status active"]
     assert "private-fixture" not in result.model_dump_json()
+
+
+@pytest.mark.parametrize(("specificity", "age", "verdict", "lookup_status", "expected"), [
+    ("exact_url", "recent", "no_detection", "no_match", "low"),
+    ("hostname", "recent", "no_detection", "no_match", "unknown"),
+    ("exact_url", "stale", "no_detection", "no_match", "unknown"),
+    ("exact_url", "recent", "unknown", "no_match", "unknown"),
+    ("exact_url", "recent", "no_detection", "timeout", "unknown"),
+    ("exact_url", "recent", "no_detection", "match", "high"),
+])
+def test_unlisted_domain_risk_uses_url_specific_reputation(specificity, age, verdict, lookup_status, expected):
+    class Provider(GoogleNoMatch):
+        async def lookup_url(self, target):
+            types = ("SOCIAL_ENGINEERING",) if lookup_status == "match" else ()
+            return Lookup(lookup_status, datetime.now(UTC), types)
+
+    class Inspector(UrlInspector):
+        async def _supplementary(self, target, consent):
+            return [ProviderCheck(provider="urlscan.io", status="found",
+                                  observed_at=datetime.now(UTC),
+                                  specificity=specificity, freshness=age, verdict=verdict)]
+
+    result = asyncio.run(Inspector(Provider()).inspect(
+        parse_url("https://docs.example.net/guide"), lookup_consent=True, enhanced_consent=True,
+    ))
+    assert result.risk == expected
+    assert result.url_report.identity_status == "insufficient_evidence"
+    if expected == "low":
+        assert "URL yang sama" in result.explanation
+        assert any(item.code == "threat_no_match" for item in result.evidence)
+
+
+@pytest.mark.parametrize(("scope", "age", "expected"), [
+    ("exact_url", "recent", "medium"),
+    ("hostname", "recent", "unknown"),
+    ("exact_url", "stale", "unknown"),
+])
+def test_two_recent_exact_url_archives_can_support_medium_risk(scope, age, expected):
+    class Inspector(UrlInspector):
+        async def _supplementary(self, target, consent):
+            now = datetime.now(UTC)
+            return [
+                ProviderCheck(provider="VirusTotal", status="found", observed_at=now,
+                              specificity="exact_url", freshness="recent", verdict="malicious", counts={"malicious": 1}),
+                ProviderCheck(provider="urlscan.io", status="found", observed_at=now,
+                              specificity=scope, freshness=age, verdict="suspicious"),
+            ]
+
+    result = asyncio.run(Inspector(GoogleNoMatch()).inspect(parse_url("https://example.org/download.zip"), True, True))
+    assert result.risk == expected
 
 
 def test_only_verified_registry_rows_and_controlled_typos(tmp_path):

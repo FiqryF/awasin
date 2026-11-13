@@ -1,5 +1,6 @@
 import asyncio
 import json
+from copy import deepcopy
 
 import httpx
 import pytest
@@ -40,6 +41,8 @@ def test_mistral_wire_and_validated_explanation(override):
         assert request.headers["authorization"] == f"Bearer {KEY}"
         assert request.headers["accept-encoding"] == "identity"
         assert KEY.encode() not in request.content
+        schema = deepcopy(SCHEMA)
+        schema["properties"]["findings"]["items"]["properties"]["evidence_ids"]["items"]["enum"] = ["EV-001"]
         assert json.loads(request.content) == {
             "model": override.get("mistral_model", MODEL),
             "messages": [{"role": "system", "content": SYSTEM}, {
@@ -47,7 +50,7 @@ def test_mistral_wire_and_validated_explanation(override):
             }],
             "max_tokens": 700,
             "response_format": {"type": "json_schema", "json_schema": {
-                "name": "awasin_evidence", "schema": SCHEMA, "strict": True,
+                "name": "awasin_evidence", "schema": schema, "strict": True,
             }},
         }
         return completion(json.dumps(PROPOSAL))

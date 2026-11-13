@@ -5,7 +5,7 @@ AWASIN adalah aplikasi web untuk memeriksa tautan yang meragukan dan membantu pe
 ## Fitur
 
 - **Link & Website Inspector** memeriksa struktur URL, mencocokkan domain dengan referensi yang dikenal, serta menampilkan hasil dari sumber keamanan yang tersedia. Pemeriksaan dapat dilakukan sebagai tamu melalui `/scan/link`.
-- **Deteksi dan penjelasan AI** memakai NVIDIA Nemotron melalui OpenRouter untuk menilai domain dan ringkasan bukti, lalu Mistral untuk menjelaskan hasil dalam alasan bernomor. Layanan ini opsional dan berjalan setelah pengguna memberi persetujuan. Pemeriksaan tidak membuka isi halaman tujuan, sehingga hasilnya tidak menjamin keamanan situs.
+- **Analisis URL dengan Mistral** menetapkan risiko dari URL yang sudah disaring dan bukti struktur, identitas, serta reputasi. Backend memvalidasi rujukan bukti dan menyediakan hasil cadangan. Pengguna dapat memilih pemeriksaan lokal tanpa AI. Pemeriksaan tidak membuka isi halaman tujuan.
 - **Pembaca QR Code** membaca gambar dan menampilkan isi QR di perangkat pengguna. Untuk menganalisis URL yang terbaca, gunakan mode Link & Website.
 - **Edukasi dan feedback** menyediakan artikel keamanan digital serta formulir untuk mengirim masukan atau melaporkan masalah.
 - **Akun dan administrasi** mencakup registrasi, login, verifikasi email, pemulihan kata sandi, profil, pengaturan, dan tampilan riwayat. Admin dapat mengelola feedback, referensi domain, dan artikel serta melihat audit aktivitas.
@@ -19,7 +19,7 @@ Mode analisis **Pesan, AI Image, dan AI Video** sudah memiliki antarmuka dan val
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS 4, React Router, Motion, jsQR |
 | Backend | Python 3.12+, FastAPI, Uvicorn, Pydantic Settings, HTTPX |
 | Akun dan data | Supabase Auth, PostgreSQL, Supabase Storage untuk avatar |
-| Integrasi opsional | Google Safe Browsing atau Google Web Risk, VirusTotal, urlscan.io, Nemotron via OpenRouter, Mistral. Pemeriksaan tambahan juga memakai DNS dan RDAP. |
+| Integrasi opsional | Mistral, Google Safe Browsing atau Google Web Risk, VirusTotal, urlscan.io, DNS, dan RDAP. |
 | Pengujian | Vitest dan pytest |
 
 ## Menjalankan secara lokal
@@ -47,7 +47,7 @@ Ganti `py -3.13` dengan `py -3.12` jika Python 3.12 yang terpasang. Jika instala
 Halaman publik, health check, dan pemeriksaan dasar struktur tautan bisa dicoba dengan konfigurasi bawaan. Untuk memakai akun, database, atau layanan pihak ketiga, salin [template frontend](frontend/.env.example) dan [template backend](backend/.env.example) menjadi `.env` di folder masing-masing jika file tersebut belum ada.
 
 - **Supabase** memakai project yang sama pada frontend dan backend. Isi `VITE_SUPABASE_URL` dan `VITE_SUPABASE_PUBLISHABLE_KEY` di frontend, serta `SUPABASE_URL` dan `SUPABASE_PUBLISHABLE_KEY` di backend. Terapkan migrasi SQL dalam [`supabase/migrations/`](supabase/migrations/) secara berurutan pada project pengembangan.
-- **Nemotron dan Mistral** memerlukan `AI_THREAT_DETECTOR_ENABLED=true`, `OPENROUTER_API_KEY`, `AWASIN_AI_ENABLED=true`, dan `MISTRAL_API_KEY` di backend. Isi `VITE_AI_THREAT_DETECTOR_PROVIDER=Nemotron` di frontend agar opsi deteksi muncul.
+- **Mistral** memerlukan `AWASIN_AI_ENABLED=true` dan `MISTRAL_API_KEY` di backend. Pengguna memberi izin di formulir sebelum domain dan path yang disaring dikirim. Query dan fragmen dihapus. Jika Mistral tidak tersedia, hasil pemeriksaan bukti tetap ditampilkan.
 - **Pemeriksaan eksternal** dapat diaktifkan dengan key provider yang sesuai di `backend/.env.example`. Simpan key provider dan kredensial rahasia di backend. Variabel `VITE_*` dibundel ke browser.
 
 ### 3. Nyalakan frontend dan backend

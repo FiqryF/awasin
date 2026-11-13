@@ -27,6 +27,9 @@ dev = ["pytest>=8.3,<10"]
 [tool.setuptools.packages.find]
 include = ["app*"]
 
+[tool.setuptools.package-data]
+"app.modules.analysis" = ["unicode-confusables.txt", "unicode-license.txt"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"

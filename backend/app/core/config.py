@@ -58,11 +58,14 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     supabase_url: str | None = None
     supabase_publishable_key: SecretStr | None = None
+    supabase_history_secret_key: SecretStr | None = None
     web_risk_enabled: bool = False
     web_risk_api_key: SecretStr | None = None
     google_safe_browsing_api_key: SecretStr | None = None
     safe_browsing_api_key: SecretStr | None = None
     virustotal_api_key: SecretStr | None = None
+    vtai_enabled: bool = True
+    vtai_agent_token: SecretStr | None = None
     urlscan_api_key: SecretStr | None = None
     verified_domain_snapshot: str | None = None
     mistral_api_key: SecretStr | None = None
