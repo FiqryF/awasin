@@ -22,6 +22,7 @@ const AdminOverview = lazy(() => import('../features/admin/OverviewPage').then(m
 const AdminFeedback = lazy(() => import('../features/admin/FeedbackPage').then(module => ({default:module.AdminFeedbackPage})))
 const AdminDomains = lazy(() => import('../features/admin/DomainsPage').then(module => ({default:module.DomainsPage})))
 const AdminArticles = lazy(() => import('../features/admin/ArticlesPage').then(module => ({default:module.ArticlesPage})))
+const AdminArticleCreate = lazy(() => import('../features/admin/ArticleCreatePage').then(module => ({default:module.ArticleCreatePage})))
 const AdminAudit = lazy(() => import('../features/admin/AuditPage').then(module => ({default:module.AuditPage})))
 const ScanHistoryPage = lazy(() => import('../pages/ScanHistoryPage').then(module => ({default:module.ScanHistoryPage})))
 const AnalysisDetailPage = lazy(() => import('../pages/AnalysisDetailPage').then(module => ({default:module.AnalysisDetailPage})))
@@ -46,6 +47,7 @@ export function AppRoutes() {
         <Route path="feedback" element={<AdminFeedback />} />
         <Route path="domains" element={<AdminDomains />} />
         <Route path="articles" element={<AdminArticles />} />
+        <Route path="articles/new" element={<AdminArticleCreate />} />
         <Route path="audit" element={<AdminAudit />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route></Route>

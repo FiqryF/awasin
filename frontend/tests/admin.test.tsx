@@ -9,6 +9,7 @@ import { OverviewPage } from '../src/features/admin/OverviewPage'
 import { AdminFeedbackPage } from '../src/features/admin/FeedbackPage'
 import { DomainsPage } from '../src/features/admin/DomainsPage'
 import { ArticlesPage } from '../src/features/admin/ArticlesPage'
+import { ArticleCreatePage } from '../src/features/admin/ArticleCreatePage'
 import { AuditPage } from '../src/features/admin/AuditPage'
 import { articles } from '../src/features/education/articles'
 import { useEducation } from '../src/features/education/useEducation'
@@ -37,7 +38,7 @@ afterEach(async()=>{if(cleanup)await act(async()=>cleanup?.());cleanup=undefined
 async function render(content:React.ReactNode,role:'admin'|'user'|null='admin'){
  const host=document.createElement('div');document.body.append(host);const root=createRoot(host)
  const account=role?{...identity,role}:null
- await act(async()=>root.render(<AuthContext.Provider value={{identity:account,loading:false,error:'',refresh:async()=>account}}><MemoryRouter initialEntries={['/admin/dashboard']}><Routes><Route element={<ProtectedRoute admin/>}><Route path="/admin" element={<AdminLayout/>}><Route path="dashboard" element={content}/></Route></Route><Route path="/login" element={<p>LOGIN</p>}/></Routes></MemoryRouter></AuthContext.Provider>))
+ await act(async()=>root.render(<AuthContext.Provider value={{identity:account,loading:false,error:'',refresh:async()=>account}}><MemoryRouter initialEntries={['/admin/dashboard']}><Routes><Route element={<ProtectedRoute admin/>}><Route path="/admin" element={<AdminLayout/>}><Route path="dashboard" element={content}/><Route path="articles" element={<ArticlesPage/>}/><Route path="articles/new" element={<ArticleCreatePage/>}/></Route></Route><Route path="/login" element={<p>LOGIN</p>}/></Routes></MemoryRouter></AuthContext.Provider>))
  cleanup=()=>{root.unmount();host.remove()};return host
 }
 async function click(host:ParentNode,text:string){const button=[...host.querySelectorAll('button')].find(b=>b.textContent===text)!;expect(button).toBeTruthy();await act(async()=>button.click())}
@@ -141,6 +142,55 @@ it('saves article text without sending editor-only IDs to the backend',async()=>
  await click(host,'Edit')
  await act(async()=>host.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})))
  expect(mock.request).toHaveBeenCalledWith('/admin/articles/article-fixture','PATCH',{content:{...articles[0],sources:articles[0].sources??[]},version:2},undefined,identity.id)
+})
+
+it('opens article create page where slug input is optional and auto-generated from title',async()=>{
+ const host=await render(<ArticlesPage/>)
+ await click(host,'Artikel baru')
+ expect(host.querySelector('h1')?.textContent).toBe('Artikel Baru')
+ const slugInput=[...host.querySelectorAll('label')].find(l=>l.textContent?.includes('Slug URL'))?.querySelector('input')
+ expect(slugInput).not.toBeNull()
+ expect(slugInput?.required).toBe(false)
+
+ const titleInput=[...host.querySelectorAll('label')].find(l=>l.textContent?.includes('Judul artikel'))?.querySelector('input')!
+ const descInput=[...host.querySelectorAll('label')].find(l=>l.textContent?.includes('Ringkasan'))?.querySelector('textarea')!
+ const catInput=[...host.querySelectorAll('label')].find(l=>l.textContent?.includes('Kategori'))?.querySelector('input')!
+ const secTitle=[...host.querySelectorAll('label')].find(l=>l.textContent?.includes('Judul bagian'))?.querySelector('input')!
+ const secPara=[...host.querySelectorAll('label')].find(l=>l.textContent?.includes('Paragraf'))?.querySelector('textarea')!
+ const srcName=[...host.querySelectorAll('label')].find(l=>l.textContent?.includes('Nama sumber'))?.querySelector('input')!
+ const srcUrl=[...host.querySelectorAll('label')].find(l=>l.textContent?.includes('URL HTTPS'))?.querySelector('input')!
+
+ await act(async()=>{
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(titleInput,'Waspada Modus Scam Phishing')
+  titleInput.dispatchEvent(new Event('input',{bubbles:true}))
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(descInput,'Ringkasan panduan edukasi penipuan digital.')
+  descInput.dispatchEvent(new Event('input',{bubbles:true}))
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(catInput,'Phishing')
+  catInput.dispatchEvent(new Event('input',{bubbles:true}))
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(secTitle,'Tanda Utama')
+  secTitle.dispatchEvent(new Event('input',{bubbles:true}))
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(secPara,'Paragraf penjelasan tanda phishing.')
+  secPara.dispatchEvent(new Event('input',{bubbles:true}))
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(srcName,'Kominfo')
+  srcName.dispatchEvent(new Event('input',{bubbles:true}))
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(srcUrl,'https://kominfo.go.id')
+  srcUrl.dispatchEvent(new Event('input',{bubbles:true}))
+ })
+
+ expect(host.textContent).toContain('/education/waspada-modus-scam-phishing')
+ await act(async()=>host.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})))
+ expect(mock.request).toHaveBeenCalledWith(
+  '/admin/articles',
+  'POST',
+  expect.objectContaining({
+   content: expect.objectContaining({
+    slug: 'waspada-modus-scam-phishing',
+    title: 'Waspada Modus Scam Phishing',
+   }),
+  }),
+  undefined,
+  identity.id,
+ )
 })
 
 describe('CMS public transition',()=>{

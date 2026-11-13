@@ -1,7 +1,8 @@
-import { ArrowLeft, ArrowUpRight, ArrowDown, BookOpen, ShieldCheck } from 'lucide-react'
+import { ArrowUpRight, BookOpen, ShieldCheck } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { useEducation } from '../features/education/useEducation'
 import { useAuth } from '../features/auth/useAuth'
+import { HomeBackLink } from '../components/ui/HomeBackLink'
 import './education.css'
 
 export function EducationPage() {
@@ -10,12 +11,15 @@ export function EducationPage() {
   const articles=resource.items
   return <section className="education-page education-center" aria-labelledby="education-center-title">
     <div className="education-ambient" aria-hidden="true"/>
+    <div className="education-top-bar">
+      <HomeBackLink to={identity?'/dashboard#edukasi':'/#edukasi'}/>
+    </div>
     <header className="education-hero">
       <div className="education-hero-copy">
         <p className="education-eyebrow"><BookOpen size={16} aria-hidden="true"/>RUANG EDUKASI AWASIN</p>
         <h1 id="education-center-title">Kenali modusnya.<br/><span>Lebih tenang melangkah.</span></h1>
         <p>Panduan singkat untuk membantu kamu berhenti sejenak, memeriksa konteks, dan menjaga informasi pribadi.</p>
-        <div className="education-hero-actions"><a className="button button-red" href="#education-topics">Jelajahi topik<ArrowDown size={17} aria-hidden="true"/></a><Link className="history-back" to={identity?'/dashboard#edukasi':'/#edukasi'}><ArrowLeft size={17} aria-hidden="true"/>Kembali ke beranda</Link></div>
+        <div className="education-hero-actions"><a className="button button-red" href="#education-topics">Jelajahi topik</a></div>
       </div>
     </header>
     <div className="education-topics-heading" id="education-topics"><div><p className="education-eyebrow">BACA. KENALI. WASPADAI.</p><h2>Bekal untuk dunia digital.</h2></div><p>Mulai dari topik yang dekat dengan keseharianmu.</p></div>
@@ -36,7 +40,7 @@ export function EducationArticlePage() {
   const article=resource.items[0]
   if(resource.loading || resource.error)return <section className="education-page"><h1>Materi edukasi</h1><EducationState resource={resource}/></section>
   if(!article)return <section className="education-page"><h1>Artikel tidak ditemukan.</h1><p>Topik ini belum tersedia. Pilih salah satu bacaan di pusat edukasi.</p><Link className="button button-red" to="/education">Lihat semua topik</Link></section>
-  return <article className="education-page education-reading"><Link to="/education" className="history-back"><ArrowLeft size={18} aria-hidden="true"/>Semua topik edukasi</Link><header><p className="education-topic">{article.category}</p><h1>{article.title}</h1><p>{article.description}</p></header><img className="education-reading-image" src={article.image} alt="" width={640} height={480} decoding="async"/>{article.sections.map(section=><section key={section.title}><h2>{section.title}</h2>{section.paragraphs.map(paragraph=><p key={paragraph}>{paragraph}</p>)}</section>)}<section className="education-source"><h2>Sumber dan batas panduan</h2><p>Ringkasan editorial AWASIN berdasarkan panduan publik berikut. Materi ini adalah panduan umum, bukan penilaian keamanan atas kontenmu.</p>{[article.source,...(article.sources??[])].map(source=><p key={source.url}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.name}<ArrowUpRight size={17} aria-hidden="true"/><span className="sr-only"> (buka situs sumber di tab baru)</span></a></p>)}</section><nav className="education-related" aria-label="Bacaan terkait"><h2>Lanjutkan membaca</h2>{articles.filter(item=>item.slug!==slug).map(item=><Link key={item.slug} to={`/education/${item.slug}`}>{item.title}<ArrowUpRight size={18} aria-hidden="true"/></Link>)}</nav><Link className="button button-red" to="/education">Kembali ke pusat edukasi</Link></article>
+  return <article className="education-page education-reading"><div className="education-top-bar"><HomeBackLink to="/education" label="Semua topik edukasi"/></div><header><p className="education-topic">{article.category}</p><h1>{article.title}</h1><p className="education-reading-summary">{article.description}</p></header><img className="education-reading-image" src={article.image} alt="" width={640} height={480} decoding="async"/>{article.sections.map(section=><section key={section.title}><h2>{section.title}</h2>{section.paragraphs.map(paragraph=><p key={paragraph}>{paragraph}</p>)}</section>)}<section className="education-source"><h2>Sumber dan batas panduan</h2><p>Seluruh materi edukasi ini merujuk pada dokumen panduan dan publikasi resmi berikut sebagai rujukan edukasi publik.</p>{[article.source,...(article.sources??[])].map(source=><p key={source.url}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.name}<ArrowUpRight size={17} aria-hidden="true"/><span className="sr-only"> (buka situs sumber di tab baru)</span></a></p>)}</section><nav className="education-related" aria-label="Bacaan terkait"><h2>Lanjutkan membaca</h2>{articles.filter(item=>item.slug!==slug).map(item=><Link key={item.slug} to={`/education/${item.slug}`}>{item.title}<ArrowUpRight size={18} aria-hidden="true"/></Link>)}</nav><Link className="button button-red" to="/education">Kembali ke pusat edukasi</Link></article>
 }
 
 function EducationState({resource}:Readonly<{resource:ReturnType<typeof useEducation>}>) {

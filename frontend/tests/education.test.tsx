@@ -30,6 +30,18 @@ it('offers recovery from an unknown slug without inventing content',async()=>{
  expect(host.querySelector('h1')?.textContent).toBe('Artikel tidak ditemukan.')
  expect(host.querySelector('a[href="/education"]')).not.toBeNull()
 })
+it('renders icon-only back button in top bar and arrow-free explore button',async()=>{
+ const host=await render()
+ const backLink=host.querySelector('.education-top-bar a.home-back-link')
+ expect(backLink).not.toBeNull()
+ expect(backLink?.getAttribute('href')).toBe('/#edukasi')
+ expect(backLink?.querySelector('svg')).not.toBeNull()
+ expect(backLink?.textContent?.trim()).toBe('')
+ const exploreButton=host.querySelector('a[href="#education-topics"]')
+ expect(exploreButton).not.toBeNull()
+ expect(exploreButton?.textContent).toBe('Jelajahi topik')
+ expect(exploreButton?.querySelector('svg')).toBeNull()
+})
 it('maps real input modes to existing general reading without inventing a risk classification',()=>{
  expect(articleForMode('qr')?.slug).toBe('keamanan-qr')
  expect(articleForMode('message')?.slug).toBe('pesan-dan-otp')
