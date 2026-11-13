@@ -56,6 +56,13 @@ class AnalysisOrchestrator:
         }
         if request.mode in {"link", "website"}:
             adapter = self.adapters.get("link") or self.adapters.get("website")
+        elif request.mode == "qr":
+            if request.media is not None:
+                adapter = None
+            elif request.url_target is not None:
+                adapter = self.adapters.get("link") or self.adapters.get("website")
+            else:
+                adapter = self.adapters.get("qr")
         else:
             adapter = self.adapters.get(request.mode)
         if adapter is None:

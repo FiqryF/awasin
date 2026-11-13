@@ -43,6 +43,7 @@ class MessageRequest(RequestContext):
 class QrRequest(RequestContext):
     mode: Literal["qr"]
     payload: str = Field(min_length=1, max_length=4096)
+    payload_consent: Literal[True]
 
 
 TextRequest = Annotated[UrlRequest | MessageRequest | QrRequest, Field(discriminator="mode")]

@@ -45,8 +45,6 @@ def box(kind, data):
 
 @pytest.mark.parametrize("payload", [
     {"mode": "message", "text": "Pesan sintetis untuk tes"},
-    {"mode": "qr", "payload": "WIFI:T:WPA;S:example;P:private;;"},
-    {"mode": "qr", "payload": "https://example.com"},
 ])
 def test_unavailable_is_not_a_report(client, payload):
     request_id = str(uuid4())
@@ -78,6 +76,42 @@ def test_media_modes(client, mode, content_type, content, metadata):
     assert result.json()["media"]["content_type"] == content_type
     assert result.json()["media"]["size_bytes"] == len(content)
     assert "private-name" not in result.text and "Private fixture" not in result.text
+
+
+@pytest.mark.parametrize(
+    "payload, code, secret",
+    [
+        ("WIFI:T:WPA;S:Home;P:private-secret;;", "wifi_configuration", "private-secret"),
+        ("BEGIN:VCARD\nFN:Private Person\nTEL:12345\nEND:VCARD", "contact_card", "Private Person"),
+        ("plain text", "plain_text", "plain text"),
+    ],
+)
+def test_qr_payload_analysis_requires_consent_and_does_not_echo_payload(client, payload, code, secret):
+    response = client.post(
+        API,
+        json={"mode": "qr", "payload": payload, "payload_consent": True},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["mode"] == "qr"
+    assert data["status"] == "inconclusive"
+    assert data["processing"] == "real"
+    assert data["risk"] == "unknown"
+    assert data["history_eligible"] is False
+    assert data["provenance"]["engine"] == "AWASIN QR Payload Analyzer"
+    assert data["evidence"][0]["code"] == code
+    assert secret not in response.text
+
+
+@pytest.mark.parametrize(
+    "payload_data",
+    [
+        {"mode": "qr", "payload": "plain text"},
+        {"mode": "qr", "payload": "plain text", "payload_consent": False},
+    ],
+)
+def test_qr_payload_analysis_rejects_missing_or_denied_consent(client, payload_data):
+    assert client.post(API, json=payload_data).status_code == 422
 
 
 @pytest.mark.parametrize("url", [

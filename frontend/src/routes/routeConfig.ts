@@ -1,7 +1,7 @@
 export const scanRoutes = [
   { path: '/scan/link', title: 'Link & Website Inspector', description: 'Periksa tautan dan indikasi penyamaran alamat website.', icon: 'link' },
   { path: '/scan/message', title: 'Message Analyzer', description: 'Tinjau pesan mencurigakan melalui teks atau screenshot.', icon: 'message' },
-  { path: '/scan/qr', title: 'QR Code Security Scanner', description: 'Periksa isi QR Code dari unggahan gambar.', icon: 'qr' },
+  { path: '/scan/qr', title: 'QR Code Security Scanner', description: 'Periksa isi QR Code dari gambar atau kamera.', icon: 'qr' },
   { path: '/scan/media', title: 'AI Media Authenticity Analyzer', description: 'Tinjau indikasi manipulasi pada gambar dan video.', icon: 'media' },
 ] as const
 

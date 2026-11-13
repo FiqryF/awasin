@@ -5,7 +5,7 @@ import type { AnalysisMode } from './scanConfig'
 type TextInput =
   | { mode: 'link' | 'website'; url: string; threat_lookup_consent?: boolean; enhanced_lookup_consent?: boolean; url_ai_consent?: boolean; openrouter_fallback_consent?: boolean }
   | { mode: 'message'; text: string }
-  | { mode: 'qr'; payload: string }
+  | { mode: 'qr'; payload: string; payload_consent: true }
 type MediaInput =
   | { mode: 'message'; file: File; text?: string }
   | { mode: 'qr' | 'image' | 'video'; file: File }
