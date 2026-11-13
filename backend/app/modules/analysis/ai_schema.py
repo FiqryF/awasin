@@ -29,9 +29,24 @@ class AIExplanation(AIModel):
     findings: list[AIFinding] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
     recommendations: list[str] = Field(default_factory=list)
+    fallback_status: Literal["unavailable", "rate_limited", "timeout", "validation_failed"] | None = None
+    history_status: Literal['saved', 'disabled', 'unavailable'] | None = None
+
+
+class AIUrlAnalysis(AIExplanation):
+    risk: Literal["low", "medium", "high", "unknown"]
+    needs_verification: bool = False
+    analyst: Literal["mistral", "nemotron"] = "mistral"
 
 
 DetectorCategory = Literal["brand_mismatch", "lookalike_domain", "subdomain_deception", "obfuscated_url", "redirect_hint", "credential_lure"]
+DetectorVerdict = Literal["likely_legitimate", "suspicious", "malicious", "unknown"]
+DETECTOR_SUMMARIES = {
+    "likely_legitimate": "Tautan ini kemungkinan sah: domain cocok dengan referensi AWASIN dan tidak ditemukan dalam daftar ancaman yang diperiksa. Ini belum menjamin keamanan isi website.",
+    "suspicious": "Tautan ini dinilai mencurigakan oleh AI berdasarkan bukti yang tersedia. Verifikasi tujuannya sebelum memasukkan data pribadi; temuan ini belum membuktikan penipuan.",
+    "malicious": "Tautan ini memiliki indikasi berbahaya yang didukung kecocokan pada daftar ancaman. Sebaiknya jangan lanjutkan dan gunakan kanal resmi secara terpisah.",
+    "unknown": "AI belum memiliki cukup bukti untuk memastikan apakah tautan ini sah atau merupakan penipuan.",
+}
 
 
 class DetectorFinding(AIModel):
@@ -44,3 +59,6 @@ class DetectorFinding(AIModel):
 class DetectorResult(AIModel):
     status: Literal["completed", "disabled", "unavailable", "rate_limited", "timeout", "validation_failed"]
     findings: list[DetectorFinding] = Field(default_factory=list)
+    verdict: DetectorVerdict | None = None
+    summary: str | None = None
+    evidence_ids: list[str] = Field(default_factory=list)

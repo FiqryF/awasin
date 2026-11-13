@@ -16,6 +16,7 @@ API = "/api/v1/analysis"
 @pytest.mark.parametrize("url, code", [
     ("https://bca.co.id.example.org/login", "misleading_subdomain"),
     ("https://bса.org", "confusable"),
+    ("https://www.bn1.co.id/", "confusable"),
     ("https://bankindonesi.org", "near_spelling"),
     ("https://example.org/login", "account_path"),
     ("https://one.two.three.example.org/", "deep_subdomains"),
@@ -28,7 +29,7 @@ def test_offline_indicators(url, code):
     target = parse_url(url)
     result = asyncio.run(UrlInspector().inspect(target))
     assert code in {e.code for e in result.evidence}
-    assert result.url_report.threat_status == "unavailable"
+    assert result.url_report.threat_status == "not_requested"
     assert result.risk in {"unknown", "medium"}
 
 
@@ -40,6 +41,20 @@ def test_punycode_is_same_signal_as_unicode():
     assert result.evidence[0].code == "confusable"
 
 
+def test_unicode_table_detects_non_ascii_domain_impersonation_for_registry_entries():
+    reference = ("Example", "example.com", "example", "https://example.com/")
+    assert domain_identity(parse_url("https://bücher.de/"), (reference,))[0] == "insufficient_evidence"
+    web = ("Web Example", "webexample.com", "webexample", "https://webexample.com/")
+    assert domain_identity(parse_url("https://ԝebexample.org/"), (web,)) == ("confusable", web)
+
+
+def test_digit_lookalike_applies_to_other_references():
+    reference = ("Site", "site.example.org", "site", "https://site.example.org/")
+    assert domain_identity(parse_url("https://s1te.net/"), (reference,)) == ("confusable", reference)
+    assert domain_identity(parse_url("https://slte.net/"), (reference,))[0] == "insufficient_evidence"
+    assert domain_identity(parse_url("https://site.example.org/"), (reference,))[0] == "reference_match"
+
+
 @pytest.mark.parametrize(("url", "status", "expected_codes"), [
     ("https://docs.example.org/account/login?next=https%3A%2F%2Flogin.example.org%2Fhome",
      "inconclusive", {"account_path", "encoded_components"}),
@@ -47,15 +62,46 @@ def test_punycode_is_same_signal_as_unicode():
     ("https://example.org/?next=%252F%252Fexample.net%252Fdocs", "partial", {"redirect_parameter", "encoded_components"}),
     ("https://tenant-a.github.io/?next=//tenant-b.github.io/docs", "partial", {"redirect_parameter"}),
     ("https://example.org/?q=https://example.net/docs", "inconclusive", set()),
-    ("https://example.org/?q=public%250A", "partial", {"encoded_controls"}),
+    ("https://example.org/?q=public%250A", "completed", {"encoded_controls"}),
     ("https://bücher.de/guide", "inconclusive", set()),
     ("https://日本語.jp/guide", "inconclusive", set()),
     ("https://dоcs.example.org/guide", "inconclusive", {"mixed_script_hostname"}),
 ])
 def test_contextual_signals_and_redirect_scope(url, status, expected_codes):
     result = asyncio.run(UrlInspector().inspect(parse_url(url)))
-    assert result.status == status and result.risk == "unknown"
+    assert result.status == status
+    assert result.risk == ("medium" if "encoded_controls" in expected_codes else "unknown")
     assert {item.code for item in result.evidence} == expected_codes
+
+
+@pytest.mark.parametrize(("url", "expected_risk", "expected_codes"), [
+    ("https://www.bca.co.id/id/individu", "low", {"reference_match"}),
+    ("https://www.bni.co.id/id-id/", "low", {"reference_match"}),
+    ("https://bca.co.id.example.org/login", "medium", {"misleading_subdomain", "account_path"}),
+    ("https://login-bca.example.org/verify-account", "medium", {"brand_reference", "account_path"}),
+    ("https://example.org/docs/getting-started", "unknown", set()),
+    ("https://www.python.org/ftp/python/3.13.2/python-3.13.2-embed-amd64.zip", "unknown", {"archive_download"}),
+    ("https://pulse.frozenneedlefishcodec1.lol/Download.zip", "unknown", {"archive_download"}),
+    ("https://example.org/%EF%83%AD%C2%A0Download.zip?c=fixture", "medium",
+     {"archive_download", "obscured_filename"}),
+    ("https://example.org/Download%252ezip?next=https%3A%2F%2Fexample.net", "medium",
+     {"archive_download", "redirect_parameter"}),
+    ("https://1.1.1.1/setup.exe", "medium", {"ip_literal", "executable_download"}),
+])
+def test_risk_decision_uses_supported_evidence(url, expected_risk, expected_codes):
+    from app.modules.analysis.url import Lookup
+
+    class NoMatch:
+        name = "Google Safe Browsing"
+
+        async def lookup_url(self, target):
+            return Lookup("no_match", datetime.now(UTC))
+
+    result = asyncio.run(UrlInspector(NoMatch()).inspect(parse_url(url), lookup_consent=True))
+    assert result.risk == expected_risk
+    assert expected_codes <= {item.code for item in result.evidence}
+    if expected_risk == "medium":
+        assert any(item.severity == "medium" and item.validation == "verified" for item in result.evidence)
 
 
 def test_identity_honors_private_suffix_boundaries_and_prioritizes_strong_evidence():

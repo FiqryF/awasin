@@ -83,23 +83,32 @@ def binary_metrics(matrix):
 async def evaluate(archive_path):
     rows, stats = benchmark_rows(archive_path)
     engine = UrlInspector()
-    matrix, disposition = Counter(), Counter()
+    matrix, disposition, decided_correctly = Counter(), Counter(), Counter()
     for label, target, _ in rows:
         result = await engine.inspect(target)
-        flagged = result.risk == "medium" or result.status == "partial"
+        flagged = result.risk in {"medium", "high"} or result.status == "partial"
         if label == "0":
             matrix["tp" if flagged else "fn"] += 1
         else:
             matrix["fp" if flagged else "tn"] += 1
+        if label == "0" and result.risk in {"medium", "high"}:
+            decided_correctly["phishing"] += 1
+        elif label == "1" and result.risk == "low":
+            decided_correctly["legitimate"] += 1
         disposition[f"{result.status}/{result.risk}"] += 1
     count = sum(matrix.values())
     matrix = dict.fromkeys(("tp", "fp", "tn", "fn"), 0) | matrix
+    class_counts = {"phishing": matrix["tp"] + matrix["fn"], "legitimate": matrix["tn"] + matrix["fp"]}
+    unknown = sum(v for k, v in disposition.items() if k.endswith("/unknown"))
+    per_class = {label: ratio(decided_correctly[label], total) for label, total in class_counts.items()}
     return {
         "seed": SEED, "domain_bucket": "first SHA-256 byte < 13 of 256",
-        "sample": count, "class_counts": {"phishing": matrix["tp"] + matrix["fn"], "legitimate": matrix["tn"] + matrix["fp"]},
+        "sample": count, "class_counts": class_counts,
         "counts": stats, "indicator_confusion": matrix, "indicator_metrics": binary_metrics(matrix),
-        "engine_disposition": disposition, "unknown_rate": ratio(sum(v for k, v in disposition.items() if k.endswith("/unknown")), count),
-        "assigned_risk_coverage": ratio(disposition["completed/medium"], count),
+        "engine_disposition": disposition, "unknown_rate": ratio(unknown, count),
+        "assigned_risk_coverage": ratio(count - unknown, count),
+        "decision_correct_rate_by_class": per_class,
+        "decision_balanced_accuracy": sum(per_class.values()) / len(per_class) if all(v is not None for v in per_class.values()) else None,
         "provider_lookups": 0,
     }
 
@@ -119,7 +128,7 @@ async def evaluate_benign(manifest_path):
             continue
         seen.add(key)
         result = await engine.inspect(target)
-        flagged = result.status == "partial" or result.risk == "medium"
+        flagged = result.status == "partial" or result.risk in {"medium", "high"}
         counts["nonroot"] += target.path != "/"
         counts["flagged"] += flagged
         counts["flagged_nonroot"] += flagged and target.path != "/"

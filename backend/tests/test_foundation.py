@@ -34,7 +34,7 @@ def test_health_and_documentation(settings):
             '/api/v1/admin/domains','/api/v1/admin/domains/{record_id}','/api/v1/admin/domains/{record_id}/review',
             '/api/v1/admin/articles','/api/v1/admin/articles/{record_id}','/api/v1/admin/articles/{record_id}/status',
             '/api/v1/admin/audit','/api/v1/education','/api/v1/education/{slug}',
-            '/api/v1/analysis','/api/v1/analysis/explanation','/api/v1/analysis/media/{mode}',
+            '/api/v1/analysis','/api/v1/analysis/explanation','/api/v1/analysis/detector','/api/v1/analysis/media/{mode}',
         }
 
 

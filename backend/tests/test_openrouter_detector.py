@@ -4,14 +4,17 @@ import json
 import httpx
 import pytest
 
-from app.modules.analysis.ai_analyst import AnalystInput
+from app.modules.analysis.ai_analyst import AnalystEvidence, AnalystInput
 from app.modules.analysis.openrouter_detector import ENDPOINT, OpenRouterDetector
 from app.modules.analysis.threat_detector import ThreatDetector, build_input
 from app.modules.analysis.url import parse_url
 
 MODEL = "nvidia/nemotron-3.5-super-vl:free"
 INPUT = build_input(parse_url("https://login-bca.example.com/verify-account?session=fixture-private"),
-                    AnalystInput(risk="unknown", status="inconclusive", evidence=[]))
+                    AnalystInput(risk="medium", status="completed", evidence=[
+                        AnalystEvidence(id="EV-001", source="url_structure", code="account_path",
+                                        status="observed", severity="medium"),
+                    ]))
 
 
 def run(handler):
@@ -26,18 +29,27 @@ def test_openrouter_wire_uses_one_free_model_and_sanitized_schema():
         calls.append(request)
         assert request.method == "POST" and str(request.url) == ENDPOINT
         assert request.headers["authorization"] == "Bearer fixture-secret"
-        assert all(value not in request.content for value in (b"example.com", b"fixture-private", b"fixture-secret"))
+        assert b"login-bca.example.com" in request.content
+        assert all(value not in request.content for value in (b"verify-account", b"fixture-private", b"fixture-secret"))
         body = json.loads(request.content)
         assert body["model"] == MODEL and "models" not in body and "tools" not in body
         assert body["provider"] == {"require_parameters": True, "allow_fallbacks": False,
                                     "max_price": {"prompt": 0, "completion": 0, "request": 0}}
         schema = body["response_format"]["json_schema"]
         assert schema["strict"] is True and "$defs" not in schema["schema"]
+        assert set(schema["schema"]["properties"]) == {"verdict", "evidence_ids", "findings"}
         assert schema["schema"]["properties"]["findings"]["items"]["additionalProperties"] is False
         assert body["reasoning"] == {"enabled": False, "exclude": True}
-        features = json.loads(body["messages"][1]["content"])["features"]
+        features = json.loads(body["messages"][-1]["content"])["features"]
         ref = next(item["id"] for item in features if item["code"] == "brand_outside_reference")
-        raw = json.dumps({"findings": [{"category": "brand_mismatch", "feature_ids": [ref]}]})
+        assert schema["schema"]["properties"]["verdict"]["enum"] == ["suspicious"]
+        assert schema["schema"]["properties"]["evidence_ids"]["items"]["enum"] == [
+            *(item["id"] for item in features), "EV-001",
+        ]
+        guidance = json.loads(body["messages"][1]["content"].split("\n", 1)[1])
+        assert guidance["preferred_verdict_evidence_ids"] == ["EV-001"]
+        raw = json.dumps({"verdict": "suspicious", "evidence_ids": [ref],
+                          "findings": [{"category": "brand_mismatch", "feature_ids": [ref]}]})
         return httpx.Response(200, json={"model": MODEL, "usage": {"cost": 0},
                                        "choices": [{"finish_reason": "stop", "message": {"content": raw}}]})
 

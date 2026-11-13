@@ -34,21 +34,29 @@ def url_hashes(target: UrlTarget) -> set[bytes]:
     hosts = {target.hostname}
     hosts.update(".".join(host_labels[-size:]) for size in range(domain_size, min(len(host_labels), domain_size + 3) + 1))
 
-    path = target.path.encode("utf-8")
-    while True:
-        decoded = unquote_to_bytes(path)
-        if decoded == path:
-            break
-        path = decoded
+    path = unescape(target.path)
     trailing_slash = path.endswith((b"/", b"/.", b"/.."))
     path = posixpath.normpath(b"/" + path.lstrip(b"/"))
     if trailing_slash and path != b"/":
         path += b"/"
-    escaped = "".join(f"%{byte:02X}" if byte <= 32 or byte >= 127 or byte in (35, 37) else chr(byte) for byte in path)
+    escaped = escape(path)
     parts = escaped.strip("/").split("/")
     paths = {"/", escaped}
     paths.update("/" + "/".join(parts[:depth]) + "/" for depth in range(1, min(3, len(parts) - 1) + 1))
+    if "?" in target.normalized_url:
+        paths.add(escaped + "?" + escape(unescape(target.query)))
     return {sha256((host + item).encode("ascii")).digest() for host in hosts for item in paths}
+
+
+def unescape(value: str) -> bytes:
+    raw = value.encode("utf-8")
+    while (decoded := unquote_to_bytes(raw)) != raw:
+        raw = decoded
+    return raw
+
+
+def escape(value: bytes) -> str:
+    return "".join(f"%{byte:02X}" if byte <= 32 or byte >= 127 or byte in (35, 37) else chr(byte) for byte in value)
 
 
 class SafeBrowsing:
@@ -60,7 +68,7 @@ class SafeBrowsing:
         self.cache: OrderedDict[bytes, tuple[float, datetime, dict[bytes, set[str]]]] = OrderedDict()
 
     async def lookup_url(self, target: UrlTarget) -> Lookup:
-        if target.scheme_assumed or "?" in target.normalized_url or target.is_ip or not target.registered_domain:
+        if target.is_ip or not target.registered_domain:
             return Lookup("unsupported")
         hashes = url_hashes(target)
         prefixes = {digest[:4] for digest in hashes}

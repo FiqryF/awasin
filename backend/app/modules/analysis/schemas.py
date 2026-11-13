@@ -29,7 +29,10 @@ class UrlRequest(RequestContext):
     threat_lookup_consent: StrictBool = False
     enhanced_lookup_consent: StrictBool = False
     ai_consent: StrictBool = False
+    url_ai_consent: StrictBool = False
+    openrouter_fallback_consent: StrictBool = False
     detector_consent: StrictBool = False
+    defer_detector: StrictBool = False
 
 
 class MessageRequest(RequestContext):
@@ -85,10 +88,12 @@ class Provenance(AnalysisModel):
 
 
 class ProviderCheck(AnalysisModel):
-    provider: Literal["VirusTotal", "urlscan.io", "DNS", "RDAP"]
+    provider: Literal["VirusTotal", "VirusTotal File", "VirusTotal AI", "urlscan.io", "DNS", "RDAP"]
     status: Literal["found", "not_found", "skipped", "unavailable", "rate_limited", "timeout", "unauthorized", "error"]
     observed_at: AwareDatetime | None = None
-    specificity: Literal["exact_url", "hostname", "related_domain"] | None = None
+    specificity: Literal["exact_url", "hostname", "related_domain", "file_hash"] | None = None
+    archive_observed_at: AwareDatetime | None = None
+    engine_count: int | None = Field(default=None, ge=0, le=10000)
     verdict: Literal["malicious", "suspicious", "no_detection", "unknown"] | None = None
     freshness: Literal["recent", "stale", "unknown"] | None = None
     counts: dict[Literal["malicious", "suspicious", "harmless", "undetected"], int] = Field(default_factory=dict)
@@ -108,7 +113,7 @@ class UrlReport(AnalysisModel):
     threat_provider: Literal["Google Safe Browsing", "Google Web Risk"] = "Google Safe Browsing"
     identity_status: Literal["reference_match", "possible_impersonation", "name_similarity", "insufficient_evidence"]
     recommendations: list[Explanation] = Field(max_length=5)
-    supplementary_checks: list[ProviderCheck] = Field(default_factory=list, max_length=4)
+    supplementary_checks: list[ProviderCheck] = Field(default_factory=list, max_length=6)
     registry_snapshot_used: bool = False
 
 
@@ -147,6 +152,8 @@ class AnalysisResponse(AnalysisModel):
     error_code: ErrorCode | None = None
     media: MediaMetadata | None = None
     history_eligible: Literal[False] = False
+    history_status: Literal['saved', 'disabled', 'unavailable'] | None = None
     url_report: UrlReport | None = None
     ai: AIOffer | None = None
     detector: DetectorResult | None = None
+    detector_offer: AIOffer | None = None

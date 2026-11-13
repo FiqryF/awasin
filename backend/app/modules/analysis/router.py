@@ -15,12 +15,15 @@ from starlette.requests import ClientDisconnect
 
 from app.modules.identity.router import access_token, bearer, service
 from app.modules.identity.service import Identity, IdentityService, unauthorized
+from app.modules.identity.preferences import read_preferences
+from app.modules.history.schemas import ReportDetail
+from app.modules.history.service import HistoryService
 
 from .orchestrator import AnalysisInput, AnalysisOrchestrator
-from .ai_schema import AIExplanation, AIOffer, AIRequest
+from .ai_schema import AIExplanation, AIOffer, AIRequest, AIUrlAnalysis, DetectorResult
 from .ai_tickets import Binding, digest
 from .ai_validator import explain
-from .ai_analyst import minimize_evidence
+from .ai_analyst import UrlAnalystInput, minimize_evidence, url_for_analyst
 from .threat_detector import build_input
 from .schemas import AnalysisResponse, MediaMode, MediaRequest, MessageRequest, TextRequest, UrlRequest
 from .url import parse_url
@@ -84,6 +87,40 @@ def explanation_binding(request: Request, identity: Identity | None) -> Binding:
     return Binding(subject=f"anonymous:{host}", session="")
 
 
+def url_history_report(result: AnalysisResponse) -> ReportDetail | None:
+    if not result.provenance or not result.url_report:
+        return None
+    risk = 'inconclusive' if result.risk == 'unknown' else result.risk
+    domain = result.url_report.registered_domain
+    return ReportDetail(
+        id=result.analysis_id, mode=result.mode, created_at=result.checked_at, saved_at=result.checked_at,
+        safe_label=domain[:160] if domain else 'Pemeriksaan tautan', status='completed', risk=risk,
+        engine=result.provenance.engine[:120], engine_version=result.provenance.version[:80], analyzed_at=result.checked_at,
+        result={'risk': risk, 'findings': [{'title': 'Ringkasan', 'description': result.explanation}],
+                'recommendations': result.url_report.recommendations},
+    )
+
+
+async def record_url_history(request: Request, identity: Identity, report: ReportDetail, result: AIExplanation | None = None):
+    provider = request.app.state.identity
+    token = request.headers['authorization'].partition(' ')[2].strip()
+    try:
+        if (await read_preferences(provider, token, identity)).history_retention == 'disabled':
+            return 'disabled'
+        if isinstance(result, AIUrlAnalysis) and result.status == 'completed':
+            risk = 'inconclusive' if result.risk == 'unknown' else result.risk
+            report = report.model_copy(update={
+                'risk': risk, 'engine': 'Nemotron' if result.analyst == 'nemotron' else 'Mistral',
+                'engine_version': provider.settings.openrouter_detector_model if result.analyst == 'nemotron' else provider.settings.mistral_model,
+                'result': report.result.model_copy(update={'risk': risk, 'recommendations': result.recommendations,
+                    'findings': [report.result.findings[0].model_copy(update={'description': result.summary or report.result.findings[0].description})]}),
+            })
+        await HistoryService(provider, token, identity).record_url(report)
+    except HTTPException:
+        return 'unavailable'
+    return 'saved'
+
+
 @router.post("", response_model=AnalysisResponse, openapi_extra={"security": [{}]})
 async def analyze(payload: TextRequest, request: Request, response: Response, identity: Actor, engine: Orchestrator):
     response.headers["Cache-Control"] = "no-store"
@@ -108,31 +145,52 @@ async def analyze(payload: TextRequest, request: Request, response: Response, id
     async with analysis_slot(engine):
         result = await engine.run(data)
     if isinstance(payload, UrlRequest) and result.url_report and result.processing == "real":
-        return await attach_ai_results(result, payload, data, request, identity)
+        history_report = url_history_report(result) if identity and data.history_consent else None
+        result = await attach_ai_results(result, payload, data, request, identity, history_report)
+        if identity and history_report and not (payload.url_ai_consent and result.ai and result.ai.status == 'pending'):
+            result.history_status = await record_url_history(request, identity, history_report)
     return result
 
 
-async def attach_ai_results(result: AnalysisResponse, payload: UrlRequest, data: AnalysisInput, request: Request, identity: Identity | None):
-    if not (payload.ai_consent or payload.detector_consent):
+async def attach_ai_results(result: AnalysisResponse, payload: UrlRequest, data: AnalysisInput, request: Request, identity: Identity | None, history_report: ReportDetail | None = None):
+    if not (payload.ai_consent or payload.url_ai_consent or payload.detector_consent):
         return result
     assessment = minimize_evidence(result)
     binding = explanation_binding(request, identity)
-    if payload.detector_consent and data.url_target:
+    if payload.detector_consent and not payload.url_ai_consent and data.url_target:
         detector = request.app.state.threat_detector
         detector_input = build_input(data.url_target, assessment, request.app.state.detector_domain_references)
-        result.detector = await while_connected(request, detector.detect(detector_input, binding.subject, consent=True))
-        if result.detector is None:
-            return result
-        observations = [item.category for item in result.detector.findings if item.assessment == "observed"]
-        if observations:
-            assessment = assessment.model_copy(update={"detector_observations": observations})
-    if payload.ai_consent:
+        if payload.defer_detector:
+            if not detector.enabled:
+                result.detector = DetectorResult(status="disabled")
+            elif detector.provider is None:
+                result.detector = DetectorResult(status="unavailable")
+            else:
+                result.detector_offer = request.app.state.detector_tickets.issue(detector_input, binding)
+        else:
+            result.detector = await while_connected(request, detector.detect(detector_input, binding.subject, consent=True))
+            if result.detector is None:
+                return result
+            observations = [item.category for item in result.detector.findings if item.assessment == "observed"]
+            if observations:
+                assessment = assessment.model_copy(update={"detector_observations": observations})
+    if payload.ai_consent or payload.url_ai_consent:
         analyst = request.app.state.security_analyst
         if not analyst.settings.awasin_ai_enabled:
             result.ai = AIOffer(status="disabled")
-        elif not analyst.configured():
+        elif not analyst.configured() and not (
+            payload.url_ai_consent and payload.openrouter_fallback_consent and request.app.state.backup_analyst
+        ):
             result.ai = AIOffer(status="unavailable")
         else:
+            if payload.url_ai_consent and data.url_target:
+                assessment = UrlAnalystInput(
+                    **assessment.model_dump(),
+                    url=url_for_analyst(data.url_target.normalized_url),
+                    registered_domain=data.url_target.registered_domain,
+                    openrouter_fallback_consent=payload.openrouter_fallback_consent,
+                    history_report=history_report,
+                )
             result.ai = request.app.state.explanation_tickets.issue(
                 assessment, binding,
             )
@@ -160,7 +218,7 @@ async def while_connected(request: Request, operation: Coroutine[None, None, T])
         await asyncio.gather(generation, disconnect, return_exceptions=True)
 
 
-@router.post("/explanation", response_model=AIExplanation, openapi_extra={"security": [{}]})
+@router.post("/explanation", response_model=AIUrlAnalysis | AIExplanation, openapi_extra={"security": [{}]})
 async def analyze_explanation(payload: AIRequest, request: Request, response: Response, identity: Actor):
     response.headers["Cache-Control"] = "no-store"
     if not payload.consent:
@@ -173,8 +231,36 @@ async def analyze_explanation(payload: AIRequest, request: Request, response: Re
     )
     if assessment is None:
         return AIExplanation(status="unavailable")
-    result = await while_connected(request, explain(analyst, assessment, consent=True))
+    async def analyze_with_fallback():
+        result = await explain(analyst, assessment, consent=True)
+        backup = request.app.state.backup_analyst
+        if (isinstance(assessment, UrlAnalystInput) and assessment.openrouter_fallback_consent and backup
+                and result.status in {"unavailable", "rate_limited", "timeout", "validation_failed"}):
+            alternate = await explain(backup, assessment, consent=True)
+            if isinstance(alternate, AIUrlAnalysis) and alternate.status == "completed":
+                return alternate.model_copy(update={"analyst": "nemotron"})
+            if alternate.status in {"unavailable", "rate_limited", "timeout", "validation_failed"}:
+                return result.model_copy(update={"fallback_status": alternate.status})
+        return result
+
+    result = await while_connected(request, analyze_with_fallback())
+    if result is not None and identity and isinstance(assessment, UrlAnalystInput) and assessment.history_report:
+        result.history_status = await record_url_history(request, identity, assessment.history_report, result)
     return result if result is not None else AIExplanation(status="unavailable")
+
+
+@router.post("/detector", response_model=DetectorResult, openapi_extra={"security": [{}]})
+async def analyze_detector(payload: AIRequest, request: Request, response: Response, identity: Actor):
+    response.headers["Cache-Control"] = "no-store"
+    binding = explanation_binding(request, identity)
+    if not payload.consent:
+        return DetectorResult(status="unavailable")
+    detector_input = request.app.state.detector_tickets.consume(payload.ticket, binding)
+    if detector_input is None:
+        return DetectorResult(status="unavailable")
+    detector = request.app.state.threat_detector
+    result = await while_connected(request, detector.detect(detector_input, binding.subject, consent=True))
+    return result if result is not None else DetectorResult(status="unavailable")
 
 
 async def bounded_body(request: Request, limit: int) -> AsyncIterator[bytes]:

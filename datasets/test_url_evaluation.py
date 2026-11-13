@@ -31,5 +31,7 @@ def test_benchmark_deduplicates_conflicts_and_keeps_unknown_separate(tmp_path, m
     assert result["counts"]["conflicting_urls_excluded"] == 1
     assert result["counts"]["duplicate_rows"] == 2
     assert result["indicator_confusion"] == {"tp": 1, "fp": 0, "tn": 1, "fn": 0}
-    assert result["unknown_rate"] == 1 and result["assigned_risk_coverage"] == 0
+    assert result["unknown_rate"] == 0.5 and result["assigned_risk_coverage"] == 0.5
+    assert result["decision_correct_rate_by_class"] == {"phishing": 1, "legitimate": 0}
+    assert result["decision_balanced_accuracy"] == 0.5
     assert result["provider_lookups"] == 0
