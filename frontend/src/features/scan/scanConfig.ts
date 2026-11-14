@@ -3,7 +3,7 @@ import { Image, Link, MessageSquare, QrCode, Video } from 'lucide-react'
 export const scanTypes = [
   { id: 'link', label: 'Link & Website', icon: Link, title: 'Periksa tautan atau alamat website.', description: 'Masukkan URL atau domain yang ingin diperiksa. AWASIN tidak membuka situsnya.', fieldLabel: 'URL atau domain yang ingin diperiksa' },
   { id: 'message', label: 'Pesan', icon: MessageSquare, title: 'Ada pesan yang bikin ragu?', description: 'Tempel isi pesan atau pilih screenshot. Hapus informasi pribadi yang tidak diperlukan.', fieldLabel: 'Isi pesan yang ingin diperiksa' },
-  { id: 'qr', label: 'QR Code', icon: QrCode, title: 'Jangan buru-buru scan.', description: 'Pilih gambar QR Code yang ingin diperiksa. Kamera belum tersedia pada tahap ini.', fieldLabel: 'Gambar QR Code' },
+  { id: 'qr', label: 'QR Code', icon: QrCode, title: 'Jangan buru-buru scan.', description: 'Unggah gambar atau pindai QR Code dengan kamera. Pembacaan lokal; pemeriksaan payload backend hanya dengan persetujuanmu.', fieldLabel: 'Gambar QR Code' },
   { id: 'image', label: 'AI Image', icon: Image, title: 'Lihat lebih teliti, sebelum percaya.', description: 'Pilih gambar untuk persiapan analisis indikasi manipulasi atau konten sintetis.', fieldLabel: 'Gambar yang ingin diperiksa' },
   { id: 'video', label: 'AI Video', icon: Video, title: 'Yang terlihat nyata, perlu ditinjau juga.', description: 'Gambar dan video adalah dua mode dari fitur analisis keaslian media yang sama.', fieldLabel: 'Video yang ingin diperiksa' },
 ] as const

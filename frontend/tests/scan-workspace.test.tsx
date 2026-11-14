@@ -265,9 +265,9 @@ it.each(['link', 'message', 'website', 'image', 'video'])('does not fabricate or
   if (mode === 'link' || mode === 'website') expect(JSON.parse(String(options?.body))).not.toHaveProperty('enhanced_lookup_consent')
   expect(window.open).not.toHaveBeenCalled()
 })
-it('shows decoded QR text safely before user-selected URL inspection', async () => {
+it('inspects an HTTP URL decoded from QR through the existing link analysis flow', async () => {
   mock.decodeQr.mockResolvedValueOnce('https://example.com/?test=local')
-  vi.mocked(fetch).mockResolvedValueOnce(unavailable('qr'))
+  vi.mocked(fetch).mockResolvedValueOnce(aiScan())
   const host = await mount('qr')
   await chooseFile(host, 'qr'); await submit(host)
   expect(host.querySelector('.qr-decoded pre')?.textContent).toBe('https://example.com/?test=local')
@@ -275,9 +275,47 @@ it('shows decoded QR text safely before user-selected URL inspection', async () 
   expect(host.querySelector('.qr-decoded a')).toBeNull()
   expect(fetch).not.toHaveBeenCalled()
   await act(async () => { host.querySelector('.qr-decoded button')!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
-  expect(host.textContent).toContain('Analisis untuk jenis konten ini belum tersedia.')
+  expect(host.querySelector('.url-report')).not.toBeNull()
   const options = vi.mocked(fetch).mock.calls[0][1]
-  expect(JSON.parse(String(options?.body))).toEqual({ mode: 'qr', payload: 'https://example.com/?test=local' })
+  expect(JSON.parse(String(options?.body))).toEqual({ mode: 'link', url: 'https://example.com/?test=local' })
+  expect(window.open).not.toHaveBeenCalled()
+})
+
+it('normalizes a bare domain from QR before website analysis', async () => {
+  mock.decodeQr.mockResolvedValueOnce('example.com/path')
+  vi.mocked(fetch).mockResolvedValueOnce(unavailable('website'))
+  const host = await mount('qr')
+  await chooseFile(host, 'qr'); await submit(host)
+  await act(async () => { host.querySelector('.qr-decoded button')!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+  const options = vi.mocked(fetch).mock.calls[0][1]
+  expect(JSON.parse(String(options?.body))).toEqual({ mode: 'website', url: 'https://example.com/path' })
+  expect(host.textContent).toContain('Analisis untuk jenis konten ini belum tersedia.')
+  expect(window.open).not.toHaveBeenCalled()
+})
+
+it('sends a non-URL QR payload only after explicit backend consent', async () => {
+  const payload = 'WIFI:T:WPA;S:Home;P:private-secret;;'
+  mock.decodeQr.mockResolvedValueOnce(payload)
+  vi.mocked(fetch).mockResolvedValueOnce(Response.json({
+    analysis_id: 'fixture', request_id: 'fixture', mode: 'qr', status: 'inconclusive', risk: 'unknown',
+    checked_at: '2026-11-14T00:00:00Z', explanation: 'QR berisi konfigurasi Wi-Fi.',
+    evidence: [], provenance: null, processing: 'real', limitations: ['Payload tidak disimpan.'],
+    error_code: null, media: null, history_eligible: false,
+  }))
+  const host = await mount('qr')
+  await chooseFile(host, 'qr')
+  await submit(host)
+  const consent = host.querySelector<HTMLInputElement>('.qr-backend-consent input[type="checkbox"]')!
+  const analyzeButton = host.querySelector<HTMLButtonElement>('.qr-backend-consent button')!
+  expect(analyzeButton.disabled).toBe(true)
+  expect(fetch).not.toHaveBeenCalled()
+  await act(async () => consent.click())
+  expect(analyzeButton.disabled).toBe(false)
+  await act(async () => analyzeButton.click())
+  expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({
+    mode: 'qr', payload, payload_consent: true,
+  })
+  expect(host.querySelector('output')?.textContent).toContain('QR berisi konfigurasi Wi-Fi.')
   expect(window.open).not.toHaveBeenCalled()
 })
 
@@ -440,7 +478,8 @@ it('renders non-URL QR contents as text and handles unreadable QR errors', async
   await chooseFile(host, 'qr'); await submit(host)
   expect(host.querySelector('.qr-decoded pre')?.textContent).toContain('<img')
   expect(host.querySelector('.qr-decoded img')).toBeNull()
-  expect(host.querySelector('.qr-decoded button')).toBeNull()
+  expect(host.querySelector('.qr-decoded button')?.textContent).toBe('Analisis isi QR di backend')
+  expect(host.querySelector<HTMLButtonElement>('.qr-decoded button')?.disabled).toBe(true)
   mock.decodeQr.mockRejectedValueOnce(new Error('QR Code tidak ditemukan.'))
   await submit(host)
   expect(host.querySelector('[role="alert"]')?.textContent).toContain('QR Code tidak ditemukan.')

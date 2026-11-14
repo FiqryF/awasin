@@ -6,11 +6,24 @@ AWASIN adalah aplikasi web untuk memeriksa tautan yang meragukan dan membantu pe
 
 - **Link & Website Inspector** memeriksa struktur URL, mencocokkan domain dengan referensi yang dikenal, serta menampilkan hasil dari sumber keamanan yang tersedia. Pemeriksaan dapat dilakukan sebagai tamu melalui `/scan/link`.
 - **Analisis URL dengan Mistral** menetapkan risiko dari URL yang sudah disaring dan bukti struktur, identitas, serta reputasi. Backend memvalidasi rujukan bukti dan menyediakan hasil cadangan. Pengguna dapat memilih pemeriksaan lokal tanpa AI. Pemeriksaan tidak membuka isi halaman tujuan.
-- **Pembaca QR Code** membaca gambar dan menampilkan isi QR di perangkat pengguna. Untuk menganalisis URL yang terbaca, gunakan mode Link & Website.
+- **Pembaca QR Code** membaca gambar unggahan atau kamera secara lokal, lalu menampilkan isi QR tanpa membukanya otomatis. URL diperiksa melalui alur Link & Website setelah pengguna memilih pemeriksaan. Payload non-URL dapat dikirim ke backend hanya setelah persetujuan eksplisit; analisis format tidak menyimpan atau meneruskan payload ke provider eksternal dan tidak menetapkan verdict aman/berbahaya.
 - **Edukasi dan feedback** menyediakan artikel keamanan digital serta formulir untuk mengirim masukan atau melaporkan masalah.
 - **Akun dan administrasi** mencakup registrasi, login, verifikasi email, pemulihan kata sandi, profil, pengaturan, dan tampilan riwayat. Admin dapat mengelola feedback, referensi domain, dan artikel serta melihat audit aktivitas.
 
 Mode analisis **Pesan, AI Image, dan AI Video** sudah memiliki antarmuka dan validasi masukan. Mesin deteksinya masih dalam pengembangan. Hasil pemeriksaan Link & Website saat ini belum disimpan ke riwayat.
+
+### Status pengerjaan fitur QR Code
+
+Fitur QR Code sudah mencakup alur pembacaan dan pemeriksaan payload berikut:
+
+- Gambar QR dapat dibaca dari unggahan atau kamera di browser. Kamera hanya dimulai setelah pengguna menekan tombol dan memberikan izin.
+- Isi QR ditampilkan sebagai teks dan tidak dibuka atau dijalankan otomatis.
+- QR berisi URL HTTP(S) dapat diperiksa melalui alur Link & Website setelah pengguna memilih pemeriksaan.
+- Payload non-URL, seperti konfigurasi Wi-Fi, kartu kontak, email, telepon, skema non-HTTP, dan teks biasa, dapat diperiksa formatnya oleh backend setelah pengguna memberikan persetujuan eksplisit.
+- Analisis payload non-URL menggunakan aturan format AWASIN. Payload tidak disimpan atau diteruskan ke provider eksternal, dan hasilnya tidak menyimpulkan bahwa isi QR aman atau berbahaya. Karena payload dapat memuat kata sandi atau data pribadi, pengguna perlu meninjau isi QR sebelum menyetujui pengirimannya.
+- Antarmuka utama tetap mengikuti tampilan yang sudah ada. Tambahan persetujuan dan tombol analisis ditampilkan untuk payload non-URL; tombol tidak aktif sebelum persetujuan diberikan.
+
+**Status:** implementasi dan validasi alur QR selesai untuk cakupan di atas. Tes yang dijalankan: 47 tes backend analisis dan 57 tes frontend terkait QR lulus, serta build frontend berhasil. Hasil klasifikasi format bukan pengganti pemeriksaan keamanan menyeluruh.
 
 ## Tech stack
 

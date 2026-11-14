@@ -4,13 +4,15 @@ import { ArrowUpRight, Info, LockKeyhole } from 'lucide-react'
 import { motion } from 'motion/react'
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion'
 import { FileUpload } from './FileUpload'
+import { QrCamera } from './QrCamera'
 import { hasHttpScheme, validateFile, validateScanInput } from './scanConfig'
 import type { ScanConfig } from './scanConfig'
-import { decodeQr, decodedHttpUrl } from './decodeQr'
+import { decodeQr, decodedHttpUrl, qrPayloadGuidance } from './decodeQr'
 import { analysisErrorMessage, requestAIExplanation, requestAnalysis } from './analysisApi'
 import type { AIState, AnalysisInput, AnalysisResult } from './analysisApi'
 import { UrlAnalysisReport } from './UrlAnalysisReport'
 import { MessageAnalysisReport } from './MessageAnalysisReport'
+import './qr.css'
 
 const fullConsent = { threat_lookup_consent: true, enhanced_lookup_consent: true, url_ai_consent: true, openrouter_fallback_consent: true } as const
 const messageFullConsent = {
@@ -32,6 +34,7 @@ export function ScanForm({ config, ownerId, onHistorySaved }: Readonly<{ config:
   const [messageHistory, setMessageHistory] = useState(false)
   const [ai, setAi] = useState<AIState | null>(null)
   const [decoded,setDecoded]=useState<string|null>(null)
+  const [qrConsent,setQrConsent]=useState(false)
   const [decoding,setDecoding]=useState(false)
   const generation=useRef(0)
   const activeRequest = useRef<AbortController | null>(null)
@@ -44,10 +47,11 @@ export function ScanForm({ config, ownerId, onHistorySaved }: Readonly<{ config:
   const isUrl = config.id === 'link'
   const isMessage = config.id === 'message'
   const screenshot = isMessage && messageMode === 'screenshot'
+  const decodedUrl = config.id === 'qr' && decoded !== null ? decodedHttpUrl(decoded) : null
   let submitLabel = 'Periksa Sekarang'
   if (config.id === 'qr') submitLabel = 'Baca QR Code'
   if (decoding) submitLabel = 'Membaca QR…'
-  if (submitting && config.id !== 'qr') submitLabel = 'Memeriksa…'
+  if (submitting) submitLabel = config.id === 'qr' ? 'Memeriksa tautan…' : 'Memeriksa…'
 
   function clearAnalysis() {
     activeRequest.current?.abort()
@@ -104,7 +108,7 @@ export function ScanForm({ config, ownerId, onHistorySaved }: Readonly<{ config:
   async function readQr(next: File) {
     if (decoding) return
     const current = ++generation.current
-    setDecoding(true); setDecoded(null)
+    setDecoding(true); setDecoded(null); setQrConsent(false)
     try {
       const value = await decodeQr(next)
       if (current === generation.current) setDecoded(value)
@@ -163,7 +167,7 @@ export function ScanForm({ config, ownerId, onHistorySaved }: Readonly<{ config:
           {isUrl && <p className="input-help" id="url-help">AWASIN memeriksa struktur alamat dan mencocokkan domain dengan referensi resmi yang tersedia.</p>}
         </div>}
         {!isUrl && (!isMessage || screenshot) && <FileUpload label={isMessage ? 'Screenshot pesan' : config.fieldLabel} video={config.id === 'video'} file={file} error={error} onChange={(next) => {
-          generation.current++;setDecoded(null);setDecoding(false)
+          generation.current++;setDecoded(null);setDecoding(false);setQrConsent(false)
           clearAnalysis()
           const fileError = next ? validateFile(next, config.id) : null
           if (isMessage) { setConsent(false); setMessageHistory(false) }
@@ -183,17 +187,38 @@ export function ScanForm({ config, ownerId, onHistorySaved }: Readonly<{ config:
           {isMessage && ownerId && <button className="message-history-toggle" type="button" aria-pressed={messageHistory}
             onClick={() => setMessageHistory(!messageHistory)}>Simpan ringkasan ke Riwayat</button>}
         </div>}
+        {config.id === 'qr' && <QrCamera key={file ? `${file.name}-${file.lastModified}` : 'no-file'} disabled={Boolean(file)} onDecoded={value => {
+          generation.current++
+          setDecoded(value)
+          setQrConsent(false)
+          setError(null)
+          clearAnalysis()
+        }} />}
         {error && <p id="scan-error" role="alert" className="form-error">{error}</p>}
         <div className="form-bottom">
           <p className="privacy-note"><LockKeyhole size={15} aria-hidden="true" />
-            {isMessage ? 'Teks asli dan screenshot tidak disimpan ke Riwayat.' : config.id === 'qr' ? 'Gambar QR dibaca di perangkatmu. Isi QR dikirim hanya saat kamu meminta pemeriksaan.' : isUrl && ownerId ? 'Ringkasan hasil disimpan ke Riwayat jika penyimpanan aktif. URL lengkap tidak disimpan.' : 'Input dikirim ke AWASIN untuk validasi dan tidak disimpan ke Riwayat.'}
+            {isMessage ? 'Teks asli dan screenshot tidak disimpan ke Riwayat.' : config.id === 'qr' ? <>Gambar QR dibaca di perangkatmu. Isi QR dikirim ke backend hanya saat kamu memilih analisis dan menyetujui pengiriman; payload tidak disimpan atau diteruskan ke provider eksternal.{ownerId && ' Ringkasan QR tidak disimpan ke Riwayat.'}</> : isUrl && ownerId ? 'Ringkasan hasil disimpan ke Riwayat jika penyimpanan aktif. URL lengkap tidak disimpan.' : 'Input dikirim ke AWASIN untuk validasi dan tidak disimpan ke Riwayat.'}
           </p>
           <button type="submit" className="button button-red" disabled={decoding || submitting}>{submitLabel} <ArrowUpRight size={19} aria-hidden="true" /></button>
         </div>
         {decoded !== null && <section className="qr-decoded" aria-labelledby="qr-decoded-title">
           <h4 id="qr-decoded-title">Isi QR Code</h4><pre>{decoded}</pre>
-          <p>Pembacaan QR dilakukan di perangkatmu. Tautan tidak dibuka otomatis.</p>
-          {decodedHttpUrl(decoded) && <button type="button" className="button button-red" disabled={submitting} onClick={() => void analyze({ mode: 'qr', payload: decoded })}>Periksa tautan dari QR</button>}
+          <p>{decodedUrl ? 'Pembacaan QR dilakukan di perangkatmu. Tautan tidak dibuka otomatis; pemeriksaan hanya berjalan jika kamu memilih tombol berikut.' : qrPayloadGuidance(decoded)}</p>
+          {decodedUrl && <button type="button" className="button button-red" disabled={submitting} onClick={() => void analyze({
+            mode: hasHttpScheme(decoded) ? 'link' : 'website',
+            url: decodedUrl,
+            ...(ownerId ? { history_consent: true } : {}),
+          })}>Periksa tautan dari QR</button>}
+          {decodedUrl === null && <div className="qr-backend-consent">
+            <label>
+              <input type="checkbox" checked={qrConsent} onChange={event => setQrConsent(event.target.checked)} />
+              <span>Saya setuju mengirim isi QR ini ke backend AWASIN untuk pemeriksaan format dan panduan keamanan.</span>
+            </label>
+            <p className="input-help">Payload dapat berisi kata sandi Wi-Fi atau informasi kontak. Analisis tidak menyimpannya, tidak meneruskannya ke provider eksternal, dan tidak memastikan bahwa isi QR aman.</p>
+            <button type="button" className="button button-red" disabled={!qrConsent || submitting} onClick={() => void analyze({
+              mode: 'qr', payload: decoded, payload_consent: true,
+            })}>Analisis isi QR di backend</button>
+          </div>}
         </section>}
         {requestError && <p className="form-error" role="alert">{requestError}</p>}
         <output className={submitting || (result && !result.url_report && !result.message_report) ? 'scan-notice' : 'sr-only'}>
@@ -211,4 +236,3 @@ export function ScanForm({ config, ownerId, onHistorySaved }: Readonly<{ config:
     </motion.div>
   )
 }
-

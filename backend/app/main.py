@@ -20,6 +20,7 @@ from app.modules.health.router import APP_VERSION, router as health_router
 from app.modules.identity.service import IdentityService
 from app.modules.feedback.router import FeedbackLimiter
 from app.modules.analysis.orchestrator import AnalysisOrchestrator
+from app.modules.analysis.qr_payload import QrPayloadAnalyzer
 from app.modules.analysis.ai_analyst import SecurityAnalyst
 from app.modules.analysis.threat_detector import ThreatDetector
 from app.modules.analysis.openrouter_detector import FREE_MODEL, OpenRouterDetector
@@ -180,7 +181,8 @@ def create_app(settings: Settings | None = None) -> ASGIApp:
                         ),
                         domain_intelligence=DomainIntelligence(client),
                         registry=registry,
-                    )
+                    ),
+                    "qr": QrPayloadAnalyzer(),
                 },
                 timeout=16,
             )

@@ -174,7 +174,13 @@ async def analyze(payload: TextRequest, request: Request, response: Response, id
         else:
             qr_payload = checked_text(payload.payload, 1)
             candidate = qr_payload.strip()
-            target = parse_url(candidate) if candidate.lower().startswith(("http:", "https:")) else None
+            if candidate.lower().startswith(("http:", "https:")):
+                target = parse_url(candidate)
+            else:
+                try:
+                    target = parse_url(candidate, allow_domain=True)
+                except ValueError:
+                    target = None
             data = AnalysisInput(**context, qr_payload=qr_payload, url=target.normalized_url if target else None, url_target=target)
     except ValueError:
         raise HTTPException(422) from None

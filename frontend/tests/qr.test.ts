@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { decodeQr, decodedHttpUrl } from '../src/features/scan/decodeQr'
+import { decodeQr, decodedHttpUrl, qrPayloadGuidance } from '../src/features/scan/decodeQr'
 import { normalizeWebsiteInput } from '../src/features/scan/scanConfig'
 
 const mock = vi.hoisted(() => ({ jsQR: vi.fn() }))
@@ -10,9 +10,15 @@ describe('safe local QR decoding', () => {
   it.each(['javascript:alert(1)', 'data:text/html,test', 'file:///etc/passwd', 'mailto:test@example.com', 'WIFI:T:WPA;S:Test;;', 'https://user:password@example.com'])('does not offer to open non-HTTP or credential-bearing QR data: %s', value => {
     expect(decodedHttpUrl(value)).toBeNull()
   })
+  it('gives local privacy guidance for common non-URL QR payloads', () => {
+    expect(qrPayloadGuidance('WIFI:T:WPA;S:Home;P:private;;')).toContain('mungkin kata sandi')
+    expect(qrPayloadGuidance('BEGIN:VCARD\nFN:Someone')).toContain('informasi kontak pribadi')
+    expect(qrPayloadGuidance('plain text')).toContain('tidak dikirim atau dibuka otomatis')
+  })
   it('normalizes HTTP links and domains without requesting their destinations', () => {
     const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher)
     expect(decodedHttpUrl('https://Example.COM/path?q=1')).toBe('https://example.com/path?q=1')
+    expect(decodedHttpUrl('example.com/path?q=1')).toBe('https://example.com/path?q=1')
     expect(normalizeWebsiteInput(' Example.COM/path ')).toBe('https://example.com/path')
     expect(normalizeWebsiteInput('javascript:alert(1)')).toBeNull()
     expect(fetcher).not.toHaveBeenCalled()
@@ -42,6 +48,15 @@ describe('safe local QR decoding', () => {
     vi.stubGlobal('createImageBitmap', vi.fn(async () => ({ width: 10000, height: 10000, close })))
     const file = { slice: () => ({ arrayBuffer: async () => new Uint8Array([255, 216, 255]).buffer }) } as unknown as File
     await expect(decodeQr(file)).rejects.toThrow('Resolusi gambar terlalu besar')
+    expect(close).toHaveBeenCalledTimes(1)
+  })
+  it('rejects oversized decoded content and still releases the bitmap', async () => {
+    const close = vi.fn()
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => ({ width: 10, height: 10, close })))
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ drawImage: vi.fn(), getImageData: () => ({ data: new Uint8ClampedArray(400), width: 10, height: 10 }) } as unknown as CanvasRenderingContext2D)
+    const file = { slice: () => ({ arrayBuffer: async () => new Uint8Array([137, 80, 78, 71, 0, 0, 0, 0, 0, 0, 0, 0]).buffer }) } as unknown as File
+    mock.jsQR.mockReturnValueOnce({ data: 'x'.repeat(4097) })
+    await expect(decodeQr(file)).rejects.toThrow('terlalu panjang')
     expect(close).toHaveBeenCalledTimes(1)
   })
 })
