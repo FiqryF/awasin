@@ -36,7 +36,8 @@
   background: #211819;
   border-bottom: 1px solid #493638;
 }
-.feedback-inbox h2 { font-size: 1rem; font-weight: 700; }
+.feedback-inbox h2 { display: flex; align-items: center; gap: 9px; font-size: 1rem; font-weight: 700; }
+.feedback-inbox h2 svg { color: #ffb7b2; }
 .feedback-inbox h2:focus:not(:focus-visible) { outline: none; }
 .feedback-inbox > header button {
   display: grid;
@@ -49,16 +50,21 @@
   cursor: pointer;
 }
 .feedback-inbox > header button:hover { background: rgb(245 255 233 / 9%); color: var(--color-canvas); }
-.feedback-inbox-body { padding: 16px; font-size: .875rem; overflow-wrap: anywhere; }
+.feedback-inbox-body { display: grid; gap: 20px; padding: 16px; font-size: .875rem; overflow-wrap: anywhere; }
+.feedback-inbox-section-title { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; color: #dfd0c7; font-size: .75rem; font-weight: 650; }
+.feedback-inbox-section-title svg { color: #ffb7b2; }
 .feedback-inbox-body ul { display: grid; gap: 12px; }
 .feedback-inbox-body li { padding: 14px; border: 1px solid #493638; border-radius: 12px; background: #231b1c; }
 .feedback-inbox-meta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; color: #cec4b8; font-size: .75rem; }
 .feedback-inbox-meta span { color: #ffb7b2; font-weight: 600; }
-.feedback-inbox-body h3 { margin-block: 4px 12px; font-weight: 650; }
+.feedback-inbox-body h4 { margin-block: 4px 12px; font-weight: 650; }
+.feedback-inbox-announcements li { border-inline-start: 3px solid #fa817f; background: #2e1c1e; }
+.feedback-inbox-announcements .feedback-inbox-message { margin-top: 0; }
+.feedback-inbox-expiry { margin-top: 7px; color: #d4c1ba; font-size: .75rem; }
 .feedback-inbox-author { border-top: 1px solid #493638; padding-top: 10px; color: #cec4b8; font-size: .75rem; font-weight: 650; }
 .feedback-inbox-message { margin-top: 4px; line-height: 1.55; white-space: pre-wrap; }
 .feedback-inbox-body nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
-.feedback-inbox-body > .button { margin-top: 12px; }
+.feedback-inbox-body section > .button { margin-top: 12px; }
 
 @media (max-width: 600px) {
   .feedback-inbox { inset-inline: 16px; width: auto; }

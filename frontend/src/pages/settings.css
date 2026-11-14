@@ -33,6 +33,8 @@
 .settings-intro h2 { font-size: 1.5rem; font-weight: 650; letter-spacing: -.025em; line-height: 1.3; }
 .settings-form { display: grid; gap: 24px; }
 .settings-form > .button { justify-self: start; }
+.settings-form + .settings-data-row { margin-top: 28px; }
+.settings-delete-fields { display: grid; gap: 16px; margin-top: 20px; }
 .settings-form .auth-field { min-width: 0; }
 .settings-form .auth-input { border-radius: 14px; }
 .settings-form input[readonly] { color: #c8d0be; background-color: #20221d; }

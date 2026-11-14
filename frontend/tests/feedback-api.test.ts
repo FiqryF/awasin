@@ -18,6 +18,17 @@ it.each(['detection','bug','idea','other'] as FeedbackCategory[])('sends consent
  expect(body.fields).toHaveProperty('description',draft.description)
  if(category!=='bug')expect(body.fields).not.toHaveProperty('feature')
 })
+it.each([
+ ['Link & Website Inspector','Link Inspector'],
+ ['QR Code Security Scanner','QR Code Scanner'],
+])('sends the bug category selection %s using the server value %s',async(feature,serverValue)=>{
+ const fetcher=vi.fn(async(_url:string,init:RequestInit)=>{
+  expect(JSON.parse(String(init.body)).fields.feature).toBe(serverValue)
+  return Response.json({receipt_id:receipt})
+ })
+ vi.stubGlobal('fetch',fetcher)
+ await expect(submitFeedback('bug',{...emptyFeedback,feature,description:'Fixture bug report.',privacy:true},receipt,null,new AbortController().signal)).resolves.toBe(receipt)
+})
 it('never silently submits as another user after an account switch',async()=>{
  mock.session.mockResolvedValueOnce({data:{session:{access_token:'fixture',user:{id:'other'}}},error:null})
  const fetcher=vi.fn();vi.stubGlobal('fetch',fetcher)

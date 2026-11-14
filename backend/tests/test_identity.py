@@ -33,6 +33,29 @@ def identity_api(settings):
         if path.endswith("jwks.json"):
             state["jwks_calls"] += 1
             return httpx.Response(200, json={"keys": state["keys"]})
+        if path == '/auth/v1/token':
+            assert request.headers['apikey'] == 'test-only-public-key'
+            assert request.url.params['grant_type'] == 'password'
+            state['delete_steps'].append('verify')
+            if json.loads(request.content) != {'email': 'local@example.invalid', 'password': 'test-password'}:
+                return httpx.Response(400)
+            return httpx.Response(200, json={'access_token':'temporary-fixture','user':{'id':state.get('verified_id', user_id),'factors':state.get('factors', [])}})
+        if path == '/auth/v1/logout':
+            assert request.headers['authorization'] == 'Bearer temporary-fixture'
+            assert request.url.params['scope'] == 'local'
+            state['delete_steps'].append('revoke')
+            return httpx.Response(204)
+        if path == '/storage/v1/object/account-avatars':
+            assert request.method == 'DELETE' and request.headers['apikey'] == 'sb_secret_fixture'
+            assert json.loads(request.content) == {'prefixes':[f'{user_id}/avatar.jpg']}
+            state['delete_steps'].append('avatar')
+            return httpx.Response(state.get('storage_status', 200), json=[])
+        if path.startswith('/auth/v1/admin/users/'):
+            assert path == f'/auth/v1/admin/users/{user_id}' and request.method == 'DELETE'
+            assert request.headers['apikey'] == 'sb_secret_fixture'
+            assert json.loads(request.content) == {'should_soft_delete': False}
+            state['delete_steps'].append('account')
+            return httpx.Response(200, json={'id':user_id})
         assert request.headers.get("authorization", "").startswith("Bearer ")
         if path == "/auth/v1/user":
             return httpx.Response(200, json={"id": user_id, "email": "local@example.invalid", "email_confirmed_at": "2026-01-01" if state["confirmed"] else None, "user_metadata": {"role": "admin"}})
@@ -60,6 +83,36 @@ def identity_api(settings):
         app.app.state.identity = service
         yield client, token, state, service, key
         client.portal.call(provider_client.aclose)
+
+
+@pytest.mark.parametrize('case, expected, steps', [
+    ('success', 200, ['verify','revoke','avatar','account']),
+    ('wrong_password', 403, ['verify']),
+    ('other_user', 403, ['verify']),
+    ('mfa', 403, ['verify','revoke']),
+    ('storage_failure', 503, ['verify','revoke','avatar']),
+    ('foreign_id', 422, []),
+    ('unauthenticated', 401, []),
+])
+def test_delete_account_requires_own_password_and_removes_only_own_account(identity_api, case, expected, steps):
+    client, token, state, service, _ = identity_api
+    service.settings = service.settings.model_copy(update={'supabase_history_secret_key':SecretStr('sb_secret_fixture')})
+    state['delete_steps'] = []
+    data = {'password':'wrong' if case == 'wrong_password' else 'test-password', 'confirmation':'HAPUS'}
+    if case == 'other_user':
+        state['verified_id'] = str(uuid4())
+    if case == 'foreign_id':
+        data['user_id'] = str(uuid4())
+    if case == 'mfa':
+        state['factors'] = [{'status':'verified'}]
+    if case == 'storage_failure':
+        state['storage_status'] = 500
+    headers = {} if case == 'unauthenticated' else {'Authorization':f'Bearer {token()}'}
+    result = client.request('DELETE', '/api/v1/account/me', json=data, headers=headers)
+    assert result.status_code == expected
+    assert state['delete_steps'] == steps
+    if case == 'success':
+        assert result.json() == {'deleted':True}
 
 
 def test_protected_requests_and_current_role(identity_api):

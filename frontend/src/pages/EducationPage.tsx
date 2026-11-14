@@ -11,12 +11,12 @@ export function EducationPage() {
   const articles=resource.items
   return <section className="education-page education-center" aria-labelledby="education-center-title">
     <div className="education-ambient" aria-hidden="true"/>
-    <div className="education-top-bar">
-      <HomeBackLink to={identity?'/dashboard#edukasi':'/#edukasi'}/>
-    </div>
     <header className="education-hero">
       <div className="education-hero-copy">
-        <p className="education-eyebrow"><BookOpen size={16} aria-hidden="true"/>RUANG EDUKASI AWASIN</p>
+        <div className="education-hero-kicker">
+          <HomeBackLink to={identity?'/dashboard#edukasi':'/#edukasi'}/>
+          <p className="education-eyebrow"><BookOpen size={16} aria-hidden="true"/>RUANG EDUKASI AWASIN</p>
+        </div>
         <h1 id="education-center-title">Kenali modusnya.<br/><span>Lebih tenang melangkah.</span></h1>
         <p>Panduan singkat untuk membantu kamu berhenti sejenak, memeriksa konteks, dan menjaga informasi pribadi.</p>
         <div className="education-hero-actions"><a className="button button-red" href="#education-topics">Jelajahi topik</a></div>

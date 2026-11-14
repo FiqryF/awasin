@@ -33,9 +33,9 @@ async function mount(mode: string, identity: Identity | null = null) {
 async function submit(host: HTMLElement) {
   await act(async () => { host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) })
 }
-async function chooseFile(host: HTMLElement, mode: string) {
+async function chooseFile(host: HTMLElement) {
   const input = host.querySelector<HTMLInputElement>('input[type="file"]')!
-  const file = new File(['local fixture only'], mode === 'video' ? 'test.mp4' : 'test.png', { type: mode === 'video' ? 'video/mp4' : 'image/png' })
+  const file = new File(['local fixture only'], 'test.png', { type: 'image/png' })
   Object.defineProperty(input, 'files', { configurable: true, value: [file] })
   await act(async () => input.dispatchEvent(new Event('change', { bubbles: true })))
 }
@@ -52,13 +52,12 @@ async function enterText(input: HTMLInputElement | HTMLTextAreaElement, value: s
     input.dispatchEvent(new Event('input', { bubbles: true }))
   })
 }
-it.each(['link', 'message', 'website', 'qr', 'image', 'video'])('preselects %s from the URL without reloading', async mode => {
+it.each(['link', 'message', 'website', 'qr', 'image', 'video'])('selects an available tab for mode %s', async mode => {
   const host = await mount(mode)
-  const visibleMode = mode === 'website' ? 'link' : mode
+  const visibleMode = ['website', 'image', 'video'].includes(mode) ? 'link' : mode
   expect(host.querySelector('[aria-selected="true"]')?.id).toBe(`tab-${visibleMode}`)
   expect(host.querySelector('[role="tabpanel"]')?.id).toBe(`panel-${visibleMode}`)
-  expect(host.querySelectorAll('[role="tab"]')).toHaveLength(5)
-  expect(host.querySelector('#tab-website')).toBeNull()
+  expect(Array.from(host.querySelectorAll('[role="tab"]'), tab => tab.textContent)).toEqual(['Link & Website', 'Pesan', 'QR Code'])
 })
 
 it('moves focus and selection from the merged tab using the arrow key', async () => {
@@ -113,11 +112,12 @@ it('loads the validated Nemotron fallback after rendering the verdict and consum
   expect(JSON.parse(String(ai[1]?.body))).toEqual({ ticket: aiTicket, consent: true })
   await act(async () => finish(Response.json({
     status: 'completed', analyst: 'nemotron', risk: 'high', summary: 'Ringkasan berdasarkan bukti.',
-    findings: [], limitations: [], recommendations: [],
+    findings: [], limitations: [], recommendations: ['Jangan buka tautan ini.'],
   })))
   const card = host.querySelector('.url-result-card')!
   expect(card.textContent).toContain('Penilaian Nemotron tervalidasi')
   expect(card.textContent).toContain('Ringkasan berdasarkan bukti.')
+  expect(card.querySelector('.url-result-next')?.textContent).toContain('Jangan buka tautan ini.')
   expect(card.querySelector('h4')?.textContent).toBe('Berbahaya — Risiko tinggi')
   expect(host.querySelector('.url-report')?.children).toHaveLength(1)
   expect(fetch).toHaveBeenCalledTimes(2)
@@ -241,27 +241,36 @@ it.each([
   expect(report.textContent).toContain(matched ? 'Ancaman ditemukan' : 'Belum dapat dipastikan')
   const coverage = { match: '5 dari 6', no_match: '5 dari 6', timeout: '3 dari 6', unsupported: '4 dari 4' }
   expect(report.querySelector('.url-result-card')?.textContent).toContain(`${coverage[status as keyof typeof coverage]} pemeriksaan sumber luar selesai.`)
+  expect(report.querySelector('.url-result-next')?.textContent).toContain('Buka layanan dari kanal resmi.')
+  const details = report.querySelector('details')!
+  const summary = details.querySelector('summary')!
+  expect(details.open).toBe(false)
+  summary.focus()
+  expect(document.activeElement).toBe(summary)
+  await act(async () => summary.click())
+  expect(details.open).toBe(true)
+  expect(details.textContent).toContain('Path menyebut login.')
+  expect(details.textContent).toContain(providerText)
+  expect(details.textContent).toContain('VirusTotal')
+  expect(fetch).toHaveBeenCalledTimes(1)
   expect(consent.checked).toBe(false)
   await enterText(host.querySelector<HTMLInputElement>('#scan-text')!, 'https://example.net/')
   expect(host.querySelector('.url-report')).toBeNull()
 })
-it.each(['link', 'message', 'website', 'image', 'video'])('does not fabricate or save analysis after valid %s input', async mode => {
+it.each(['link', 'message', 'website'])('does not fabricate or save analysis after valid %s input', async mode => {
   vi.mocked(fetch).mockResolvedValueOnce(unavailable(mode))
   const host = await mount(mode)
-  const input = host.querySelector<HTMLInputElement|HTMLTextAreaElement>('#scan-text')
-  if (input) {
-    const value = mode === 'message' ? 'Pesan fixture yang cukup panjang' : mode === 'website' ? 'example.com' : 'https://example.com'
-    await enterText(input, value)
-  } else await chooseFile(host, mode)
+  const input = host.querySelector<HTMLInputElement|HTMLTextAreaElement>('#scan-text')!
+  const value = mode === 'message' ? 'Pesan fixture yang cukup panjang' : mode === 'website' ? 'example.com' : 'https://example.com'
+  await enterText(input, value)
   await submit(host)
   expect(host.textContent).toContain('Analisis untuk jenis konten ini belum tersedia.')
   expect(host.textContent).not.toContain('Simpan ke Riwayat')
   expect(fetch).toHaveBeenCalledTimes(1)
   const [url, options] = vi.mocked(fetch).mock.calls[0]
-  expect(url).toMatch(input ? /\/api\/v1\/analysis$/ : new RegExp(`/api/v1/analysis/media/${mode}$`))
+  expect(url).toMatch(/\/api\/v1\/analysis$/)
   expect(options?.method).toBe('POST')
   expect(new Headers(options?.headers).has('Authorization')).toBe(false)
-  if (options?.body instanceof FormData) expect((options.body.get('file') as File).name).toBe('upload')
   if (mode === 'link' || mode === 'website') expect(JSON.parse(String(options?.body))).not.toHaveProperty('enhanced_lookup_consent')
   expect(window.open).not.toHaveBeenCalled()
 })
@@ -269,7 +278,7 @@ it('inspects an HTTP URL decoded from QR through the existing link analysis flow
   mock.decodeQr.mockResolvedValueOnce('https://example.com/?test=local')
   vi.mocked(fetch).mockResolvedValueOnce(aiScan())
   const host = await mount('qr')
-  await chooseFile(host, 'qr'); await submit(host)
+  await chooseFile(host); await submit(host)
   expect(host.querySelector('.qr-decoded pre')?.textContent).toBe('https://example.com/?test=local')
   expect(host.querySelector('output')?.textContent).toBe('')
   expect(host.querySelector('.qr-decoded a')).toBeNull()
@@ -285,11 +294,46 @@ it('normalizes a bare domain from QR before website analysis', async () => {
   mock.decodeQr.mockResolvedValueOnce('example.com/path')
   vi.mocked(fetch).mockResolvedValueOnce(unavailable('website'))
   const host = await mount('qr')
-  await chooseFile(host, 'qr'); await submit(host)
+  await chooseFile(host); await submit(host)
   await act(async () => { host.querySelector('.qr-decoded button')!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
   const options = vi.mocked(fetch).mock.calls[0][1]
   expect(JSON.parse(String(options?.body))).toEqual({ mode: 'website', url: 'https://example.com/path' })
   expect(host.textContent).toContain('Analisis untuk jenis konten ini belum tersedia.')
+  expect(window.open).not.toHaveBeenCalled()
+})
+
+it('checks a QR URL with the same provider consent and validated AI result as Link & Web', async () => {
+  const url = 'https://example.org/'
+  mock.decodeQr.mockResolvedValueOnce(url).mockResolvedValueOnce('https://example.com/')
+  vi.mocked(fetch).mockResolvedValueOnce(aiScan({ status: 'pending', ticket: aiTicket }))
+    .mockResolvedValueOnce(Response.json({
+      status: 'completed', analyst: 'nemotron', risk: 'high', summary: 'Ringkasan berdasarkan bukti.',
+      findings: [], recommendations: [], limitations: [],
+    }))
+  const host = await mount('qr')
+  await chooseFile(host)
+  await submit(host)
+  const consent = host.querySelector<HTMLInputElement>('[aria-describedby="qr-url-consent-help"]')!
+  expect(host.querySelector('.qr-decoded strong')?.textContent).toBe('example.org')
+  expect(consent.checked).toBe(false)
+  expect(fetch).not.toHaveBeenCalled()
+  await act(async () => consent.click())
+  expect(fetch).not.toHaveBeenCalled()
+  await act(async () => host.querySelector<HTMLButtonElement>('.qr-decoded button')!.click())
+  const [scan, ai] = vi.mocked(fetch).mock.calls
+  expect(JSON.parse(String(scan[1]?.body))).toEqual({
+    mode: 'link', url, threat_lookup_consent: true, enhanced_lookup_consent: true,
+    url_ai_consent: true, openrouter_fallback_consent: true,
+  })
+  expect(JSON.parse(String(ai[1]?.body))).toEqual({ ticket: aiTicket, consent: true })
+  expect(host.querySelector('.url-result-card h4')?.textContent).toBe('Berbahaya — Risiko tinggi')
+  expect(host.querySelector('.url-result-card')?.textContent).toContain('Penilaian Nemotron tervalidasi')
+  expect(consent.checked).toBe(false)
+  await act(async () => consent.click())
+  await chooseFile(host)
+  await submit(host)
+  expect(host.querySelector<HTMLInputElement>('[aria-describedby="qr-url-consent-help"]')?.checked).toBe(false)
+  expect(fetch).toHaveBeenCalledTimes(2)
   expect(window.open).not.toHaveBeenCalled()
 })
 
@@ -303,7 +347,7 @@ it('sends a non-URL QR payload only after explicit backend consent', async () =>
     error_code: null, media: null, history_eligible: false,
   }))
   const host = await mount('qr')
-  await chooseFile(host, 'qr')
+  await chooseFile(host)
   await submit(host)
   const consent = host.querySelector<HTMLInputElement>('.qr-backend-consent input[type="checkbox"]')!
   const analyzeButton = host.querySelector<HTMLButtonElement>('.qr-backend-consent button')!
@@ -350,7 +394,7 @@ it.each([
   }))
   const host = await mount('message')
   await act(async () => host.querySelectorAll<HTMLInputElement>('input[name="message-mode"]')[1].click())
-  await chooseFile(host, 'message')
+  await chooseFile(host)
   await submit(host)
   expect(host.querySelector('.url-result-card h4')?.textContent).toBe(title)
 })
@@ -362,7 +406,7 @@ it('uploads screenshots without the original file name and offers OCR correction
   } }))
   const host = await mount('message')
   await act(async () => host.querySelectorAll<HTMLInputElement>('input[name="message-mode"]')[1].click())
-  await chooseFile(host, 'message')
+  await chooseFile(host)
   await submit(host)
   const body = vi.mocked(fetch).mock.calls[0][1]?.body as FormData
   expect(JSON.parse(String(body.get('metadata')))).toEqual({ mode: 'message' })
@@ -373,15 +417,15 @@ it('uploads screenshots without the original file name and offers OCR correction
   expect(host.querySelector('textarea')?.value).toBe('Teks yang sudah disaring')
 })
 
-it('uses one consent for screenshot checks and includes the link result in the summary card', async () => {
+it('uses one consent for screenshot checks and includes the link result in expandable details', async () => {
   const base = await unavailable('message').json()
   vi.mocked(fetch).mockResolvedValueOnce(Response.json({ ...base, message_report: {
     ocr_status: 'completed', ai_status: 'not_requested',
-    links: [{ host: 'example.org', status: 'no_match', risk: 'medium' }], recommendations: [],
+    links: [{ host: 'example.org', status: 'no_match', risk: 'medium' }], recommendations: ['Cek dari kanal resmi.'],
   } }))
   const host = await mount('message')
   await act(async () => host.querySelectorAll<HTMLInputElement>('input[name="message-mode"]')[1].click())
-  await chooseFile(host, 'message')
+  await chooseFile(host)
   const label = [...host.querySelectorAll('label')].find(item => item.textContent?.includes('Izinkan pemeriksaan lengkap'))!
   expect(host.querySelectorAll('input[type="checkbox"]')).toHaveLength(1)
   await act(async () => label.querySelector('input')!.click())
@@ -391,7 +435,13 @@ it('uses one consent for screenshot checks and includes the link result in the s
     mode: 'message', message_ai_consent: true, message_openrouter_consent: true,
     message_link_consent: true, message_link_enhanced_consent: true,
   })
-  expect(host.querySelector('.url-result-card li')?.textContent).toContain('example.org · Waspada')
+  expect(host.querySelector('.url-result-next')?.textContent).toContain('Cek dari kanal resmi.')
+  const details = host.querySelector<HTMLDetailsElement>('.url-result-card details')!
+  expect(details.open).toBe(false)
+  await act(async () => details.querySelector('summary')!.click())
+  expect(details.open).toBe(true)
+  expect(details.textContent).toContain('example.org · Waspada')
+  expect(fetch).toHaveBeenCalledTimes(1)
 })
 
 it('requests full message inspection with one checkbox and labels the Nemotron result', async () => {
@@ -475,7 +525,7 @@ it('announces a disconnected API and permits a retry', async () => {
 it('renders non-URL QR contents as text and handles unreadable QR errors', async () => {
   mock.decodeQr.mockResolvedValueOnce('<img src=x onerror=alert(1)>')
   const host = await mount('qr')
-  await chooseFile(host, 'qr'); await submit(host)
+  await chooseFile(host); await submit(host)
   expect(host.querySelector('.qr-decoded pre')?.textContent).toContain('<img')
   expect(host.querySelector('.qr-decoded img')).toBeNull()
   expect(host.querySelector('.qr-decoded button')?.textContent).toBe('Analisis isi QR di backend')

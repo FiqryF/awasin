@@ -4,12 +4,18 @@ import { feedbackFields, validateFeedback } from './feedbackModel'
 import type { FeedbackCategory, FeedbackDraft } from './feedbackModel'
 import { validReportId } from '../history/contracts'
 
+const featureValues: Record<string, string> = {
+  'Link & Website Inspector': 'Link Inspector',
+  'QR Code Security Scanner': 'QR Code Scanner',
+}
+
 export async function submitFeedback(category:FeedbackCategory,draft:FeedbackDraft,submissionKey:string,owner:string|null,signal:AbortSignal) {
   if(Object.keys(validateFeedback(category,draft)).length||draft.file)throw new Error('Periksa isian dan hapus lampiran. Pengiriman screenshot belum tersedia.')
   const {data,error}=supabase?await supabase.auth.getSession():{data:{session:null},error:null}
   if(error)throw new Error('Sesi tidak dapat diverifikasi. Coba lagi sebelum mengirim.')
   if((data.session?.user.id??null)!==owner)throw new Error('Akun aktif berubah atau belum terverifikasi. Buka kembali halaman Feedback.')
   const fields=Object.fromEntries(feedbackFields[category].filter(field=>field.name!=='scanReference').map(field=>[field.name,draft[field.name].trim()]).filter(([,value])=>value))
+  if (category === 'bug' && Object.hasOwn(featureValues, fields.feature)) fields.feature = featureValues[fields.feature]
   let response:Response
   try{response=await fetch(`${API_BASE_URL}/api/v1/feedback`,{method:'POST',cache:'no-store',credentials:'omit',signal:AbortSignal.any([signal,AbortSignal.timeout(15000)]),headers:{'Content-Type':'application/json',...(data.session?{Authorization:`Bearer ${data.session.access_token}`}:{})},body:JSON.stringify({submission_key:submissionKey,category,fields,contact_email:draft.email.trim()||null,report_id:category==='detection'?draft.scanReference.trim()||null:null,consent:draft.privacy})})}
   catch{throw new Error('Penerimaan belum dapat dikonfirmasi. Periksa koneksi dan coba lagi; isian tetap tersedia.')}

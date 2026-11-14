@@ -51,7 +51,7 @@ describe('authenticated dashboard foundation', () => {
     const host = await render(<Routes><Route element={<MainLayout />}><Route element={<ProtectedRoute />}><Route path="/dashboard" element={<DashboardPage />} /></Route></Route></Routes>)
     expect(host.querySelectorAll('h1')).toHaveLength(1)
     expect(host.querySelector('h1')?.textContent).toContain('Pengguna Uji')
-    expect(host.querySelectorAll('[role="tab"]')).toHaveLength(5)
+    expect(host.querySelectorAll('[role="tab"]')).toHaveLength(3)
     expect(host.querySelectorAll('footer')).toHaveLength(1)
     expect(host.querySelectorAll('.article-card')).toHaveLength(4)
     expect(host.querySelector('video')).toBeNull() // Reduced motion is enabled in this fixture.
@@ -64,7 +64,7 @@ describe('authenticated dashboard foundation', () => {
       expect(tab.getAttribute('aria-selected')).toBe('true')
       expect(host.querySelector('[role="tabpanel"]')?.getAttribute('aria-labelledby')).toBe(tab.id)
     }
-    expect(host.querySelector('input[type="file"]')?.getAttribute('accept')).toContain('video/mp4')
+    expect(host.querySelector('input[type="file"]')?.getAttribute('accept')).toContain('image/png')
   })
   it('uses a generic greeting when the verified display name is empty', async () => {
     const host = await render(<DashboardPage />, { ...state, identity: { ...identity, profile: { ...identity.profile, display_name: '  ' } } })
@@ -105,7 +105,7 @@ describe('authenticated dashboard foundation', () => {
     expect(host.querySelector('a[aria-label="Masuk ke akun AWASIN"]')).not.toBeNull()
     expect(host.querySelector('[aria-label="Menu akun"]')).toBeNull()
     expect([...host.querySelectorAll('.desktop-nav a')].map(a => a.textContent)).toEqual(['Beranda', 'Periksa', 'Edukasi', 'Feedback'])
-    expect(host.querySelectorAll('[role="tab"]')).toHaveLength(5)
+    expect(host.querySelectorAll('[role="tab"]')).toHaveLength(3)
   })
 })
 
