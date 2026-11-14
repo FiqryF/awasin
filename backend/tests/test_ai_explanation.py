@@ -311,6 +311,7 @@ def wire(client, fake):
     (True, 'manual', 'low', 201, 'saved'),
     (True, 'manual', 'timeout', 201, 'saved'),
     (True, 'disabled', None, 201, 'disabled'),
+    (True, 'manual', None, None, 'unconfigured'),
     (True, 'manual', None, 403, 'unavailable'),
 ])
 def test_url_history_uses_authenticated_owner_and_final_risk(signed_in, retention, ai_result, write_status, expected):
@@ -334,7 +335,7 @@ def test_url_history_uses_authenticated_owner_and_final_risk(signed_in, retentio
         identity = Identity(id=owner, email='fixture@example.org', role='user', aal='aal1', profile={'id': owner, 'display_name': 'Fixture'})
         state.identity = IdentityService(state.settings.model_copy(update={
             'supabase_url': 'https://fixture.supabase.co', 'supabase_publishable_key': SecretStr('sb_publishable_fixture'),
-            'supabase_history_secret_key': SecretStr('sb_secret_fixture'),
+            'supabase_history_secret_key': SecretStr('sb_secret_fixture') if write_status is not None else None,
         }), httpx.AsyncClient(transport=httpx.MockTransport(respond)))
         client.app.app.dependency_overrides[optional_identity] = lambda: identity if signed_in else None
         headers = {'Authorization': 'Bearer test-session'} if signed_in else {}
@@ -348,7 +349,7 @@ def test_url_history_uses_authenticated_owner_and_final_risk(signed_in, retentio
             result = client.post(f'{API}/explanation', headers=headers, json={'ticket': scan['ai']['ticket'], 'consent': True}).json()
             assert 'history_report' not in fake.calls[0]['payload']
         assert result['history_status'] == expected
-        if signed_in and retention == 'manual':
+        if signed_in and retention == 'manual' and write_status is not None:
             row, = writes
             assert row['owner_id'] == str(owner) and row['id'] == scan['analysis_id'] and row['saved_at']
             assert row['safe_label'] == 'example.org' and row['result']['risk'] == ('low' if ai_result == 'low' else 'inconclusive')

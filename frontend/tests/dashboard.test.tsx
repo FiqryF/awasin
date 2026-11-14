@@ -56,7 +56,7 @@ describe('authenticated dashboard foundation', () => {
     expect(host.querySelectorAll('.article-card')).toHaveLength(4)
     expect(host.querySelector('video')).toBeNull() // Reduced motion is enabled in this fixture.
     expect(host.textContent).toContain('Belum ada pemeriksaan tersimpan.')
-    expect(host.textContent).toContain('Konten pemeriksaan tidak disimpan otomatis.')
+    expect(host.querySelector('.dashboard-storage-note')?.textContent).toContain('URL lengkap tidak disimpan.')
     expect([...host.querySelectorAll('.desktop-nav a')].map(a => a.textContent)).toEqual(['Beranda', 'Periksa', 'Riwayat', 'Edukasi', 'Feedback'])
     const tabs = [...host.querySelectorAll('[role="tab"]')]
     for (const tab of tabs) {
@@ -70,6 +70,27 @@ describe('authenticated dashboard foundation', () => {
     const host = await render(<DashboardPage />, { ...state, identity: { ...identity, profile: { ...identity.profile, display_name: '  ' } } })
     expect(host.querySelector('h1')?.textContent).toBe('Selamat datang kembali.')
     expect(host.textContent).not.toContain('undefined')
+  })
+  it('moves the navbar pill from Periksa to Riwayat when recent activity reaches the viewport marker', async () => {
+    const frame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => { callback(0); return 1 })
+    try {
+      const host = await render(<><FloatingNavbar /><main id="main-content"><DashboardPage /></main></>)
+      const top = window.innerHeight * 0.25
+      const activity = host.querySelector('.dashboard-activity')!
+      let activityTop = top + 100
+      const sections = [['beranda', () => -800], ['periksa', () => -100], [activity.id, () => activityTop], ['edukasi', () => top + 800]] as const
+      for (const [id, y] of sections) {
+        vi.spyOn(host.querySelector(`#${id}`)!, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, y(), 500, 500))
+      }
+      await act(async () => { window.dispatchEvent(new Event('resize')) })
+      expect(host.querySelector('.nav-active-pill')?.getAttribute('data-active')).toBe('periksa')
+      activityTop = top - 10
+      await act(async () => { window.dispatchEvent(new Event('resize')) })
+      expect(host.querySelector('.nav-active-pill')?.getAttribute('data-active')).toBe('history')
+      expect(host.querySelector('.desktop-nav a[href="/history"]')?.getAttribute('aria-current')).toBe('location')
+    } finally {
+      frame.mockRestore()
+    }
   })
   it.each([{ loading: true, identity: null, error: '' }, { loading: false, identity: null, error: '' }, { loading: false, identity: null, error: 'Sesi tidak valid.' }])('does not render account data for unresolved, missing or revoked identity %#', async (auth) => {
     function LoginDestination() { const { state: entry } = useLocation(); return <p>LOGIN {entry?.returnTo}</p> }

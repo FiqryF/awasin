@@ -281,15 +281,101 @@ it('shows decoded QR text safely before user-selected URL inspection', async () 
   expect(window.open).not.toHaveBeenCalled()
 })
 
-it('combines screenshot and text without sending the local file name', async () => {
-  vi.mocked(fetch).mockResolvedValueOnce(unavailable('message'))
+it.each([[false, 'saved', false], [true, 'saved', true], [true, 'unavailable', false]])('shows saved message history only with consent and a receipt (%s, %s)', async (consent, status, saved) => {
+  const identity: Identity = { id: 'fixture-owner', email: 'fixture@example.invalid', aal: 'aal1', role: 'user', profile: { id: 'fixture-owner', display_name: 'Fixture' } }
+  mock.getSession.mockResolvedValueOnce({ data: { session: { user: { id: identity.id }, access_token: 'fixture-token' } }, error: null })
+  vi.mocked(fetch).mockResolvedValueOnce(Response.json({ ...await unavailable('message').json(), history_status: status,
+    message_report: { ocr_status: 'not_requested', ai_status: 'invalid_response', links: [], recommendations: [] },
+  }))
+  const host = await mount('message', identity)
+  await enterText(host.querySelector('textarea')!, 'Pesan sintetis untuk tes')
+  const save = [...host.querySelectorAll('button')].find(button => button.textContent === 'Simpan ringkasan ke Riwayat')!
+  expect(host.querySelectorAll('input[type="checkbox"]')).toHaveLength(1)
+  if (consent) await act(async () => save.click())
+  expect(save.getAttribute('aria-pressed')).toBe(String(consent))
+  await submit(host)
+  expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body)).history_consent).toBe(consent ? true : undefined)
+  expect(host.textContent?.includes('Tersimpan di Riwayat.')).toBe(saved)
+  expect(host.textContent).toContain('Hasil pemeriksaan AWASIN · Analisis AI tidak lolos validasi')
+})
+
+it.each([
+  ['completed', 'completed', 'Bukti belum cukup'],
+  ['completed', 'invalid_response', 'Analisis AI gagal'],
+  ['completed', 'timeout', 'Analisis AI gagal'],
+  ['completed', 'rate_limited', 'Analisis AI gagal'],
+  ['truncated', 'completed', 'Teks screenshot perlu diperiksa'],
+  ['failed', 'not_requested', 'Teks screenshot perlu diperiksa'],
+])('distinguishes unknown OCR and AI outcomes (%s, %s)', async (ocrStatus, aiStatus, title) => {
+  vi.mocked(fetch).mockResolvedValueOnce(Response.json({ ...await unavailable('message').json(),
+    message_report: { ocr_status: ocrStatus, ai_status: aiStatus, links: [], recommendations: [] },
+  }))
   const host = await mount('message')
-  await enterText(host.querySelector('textarea')!, 'Pesan uji')
+  await act(async () => host.querySelectorAll<HTMLInputElement>('input[name="message-mode"]')[1].click())
+  await chooseFile(host, 'message')
+  await submit(host)
+  expect(host.querySelector('.url-result-card h4')?.textContent).toBe(title)
+})
+
+it('uploads screenshots without the original file name and offers OCR correction', async () => {
+  const base = await unavailable('message').json()
+  vi.mocked(fetch).mockResolvedValueOnce(Response.json({ ...base, message_report: {
+    ocr_status: 'low_confidence', ai_status: 'not_requested', links: [], recommendations: [], ocr_preview: 'Teks yang sudah disaring',
+  } }))
+  const host = await mount('message')
+  await act(async () => host.querySelectorAll<HTMLInputElement>('input[name="message-mode"]')[1].click())
   await chooseFile(host, 'message')
   await submit(host)
   const body = vi.mocked(fetch).mock.calls[0][1]?.body as FormData
-  expect(JSON.parse(String(body.get('metadata')))).toEqual({ mode: 'message', text: 'Pesan uji' })
+  expect(JSON.parse(String(body.get('metadata')))).toEqual({ mode: 'message' })
   expect((body.get('file') as File).name).toBe('upload')
+  expect(host.textContent).toContain('Pembacaan OCR kurang jelas.')
+  const edit = [...host.querySelectorAll('button')].find(button => button.textContent === 'Koreksi di mode teks')!
+  await act(async () => edit.click())
+  expect(host.querySelector('textarea')?.value).toBe('Teks yang sudah disaring')
+})
+
+it('uses one consent for screenshot checks and includes the link result in the summary card', async () => {
+  const base = await unavailable('message').json()
+  vi.mocked(fetch).mockResolvedValueOnce(Response.json({ ...base, message_report: {
+    ocr_status: 'completed', ai_status: 'not_requested',
+    links: [{ host: 'example.org', status: 'no_match', risk: 'medium' }], recommendations: [],
+  } }))
+  const host = await mount('message')
+  await act(async () => host.querySelectorAll<HTMLInputElement>('input[name="message-mode"]')[1].click())
+  await chooseFile(host, 'message')
+  const label = [...host.querySelectorAll('label')].find(item => item.textContent?.includes('Izinkan pemeriksaan lengkap'))!
+  expect(host.querySelectorAll('input[type="checkbox"]')).toHaveLength(1)
+  await act(async () => label.querySelector('input')!.click())
+  await submit(host)
+  const body = vi.mocked(fetch).mock.calls[0][1]?.body as FormData
+  expect(JSON.parse(String(body.get('metadata')))).toEqual({
+    mode: 'message', message_ai_consent: true, message_openrouter_consent: true,
+    message_link_consent: true, message_link_enhanced_consent: true,
+  })
+  expect(host.querySelector('.url-result-card li')?.textContent).toContain('example.org · Waspada')
+})
+
+it('requests full message inspection with one checkbox and labels the Nemotron result', async () => {
+  const base = await unavailable('message').json()
+  vi.mocked(fetch).mockResolvedValueOnce(Response.json({ ...base, risk: 'low', message_report: {
+    ocr_status: 'not_requested', ai_status: 'completed', analyst: 'nemotron', links: [], recommendations: [],
+  } }))
+  const host = await mount('message')
+  await enterText(host.querySelector('textarea')!, 'Pesan fixture untuk Nemotron')
+  const checkboxes = host.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')
+  expect(checkboxes).toHaveLength(1)
+  expect(checkboxes[0].checked).toBe(false)
+  expect(host.textContent).toContain('AWASIN bisa saja salah')
+  await act(async () => checkboxes[0].click())
+  await submit(host)
+  expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toMatchObject({
+    mode: 'message', message_ai_consent: true, message_openrouter_consent: true,
+    message_link_consent: true, message_link_enhanced_consent: true,
+  })
+  expect(host.textContent).toContain('Penilaian Nemotron (OpenRouter) tervalidasi')
+  expect(host.querySelector('.url-result-card h4')?.textContent).toBe('Aman')
+  expect(checkboxes[0].checked).toBe(false)
 })
 
 it('aborts pending analysis after an edit and ignores its late result', async () => {

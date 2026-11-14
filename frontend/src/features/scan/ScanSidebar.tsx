@@ -11,7 +11,7 @@ export function ScanSidebar() {
           <li><span aria-hidden="true">02</span>Masukkan link, pesan, atau file.</li>
           <li><span aria-hidden="true">03</span>Tinjau bukti, indikasi risiko, dan saran yang tersedia.</li>
         </ol>
-        <p className="sidebar-note">Link &amp; Website sudah dapat diperiksa. Mode lain belum menghasilkan penilaian risiko.</p>
+        <p className="sidebar-note">Periksa tautan, website, atau pesan. Mode QR dan media memiliki cakupan berbeda.</p>
       </div>
       <div className="sidebar-panel">
         <div className="sidebar-label"><span className="section-label">KEAMANAN DATA</span><Fingerprint size={20} aria-hidden="true" /></div>

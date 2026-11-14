@@ -6,6 +6,7 @@ import { BrandMark } from '../ui/BrandMark'
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion'
 import { useAuth } from '../../features/auth/useAuth'
 import { ProfileMenu } from './ProfileMenu'
+import { FeedbackInbox } from '../../features/feedback/FeedbackInbox'
 
 function NavIndicator({ nav, active, reducedMotion }: Readonly<{ nav: RefObject<HTMLElement | null>; active?: string; reducedMotion: boolean }>) {
   const [position, setPosition] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
@@ -24,7 +25,7 @@ function NavIndicator({ nav, active, reducedMotion }: Readonly<{ nav: RefObject<
   return position && <motion.span className="nav-active-pill" data-active={active} initial={false} animate={position} transition={{ duration: reducedMotion ? 0 : 0.35, ease: [0.16, 1, 0.3, 1] }} aria-hidden="true" />
 }
 
-const navigation = [{ hash: 'beranda', label: 'Beranda' }, { hash: 'periksa', label: 'Periksa' }, { hash: 'edukasi', label: 'Edukasi' }]
+const dashboardSections = ['beranda', 'periksa', 'history', 'edukasi']
 
 export function FloatingNavbar() {
   const location = useLocation()
@@ -58,8 +59,8 @@ export function FloatingNavbar() {
     let frame = 0
     const collect = () => {
       darkSections.current = Array.from(document.querySelectorAll('[data-nav-theme="dark"]'))
-      pageSections.current = navigation.flatMap(({ hash }) => {
-        const section = document.getElementById(hash)
+      pageSections.current = dashboardSections.flatMap(id => {
+        const section = document.getElementById(id)
         return section ? [section] : []
       })
       setCompact(window.scrollY > 48)
@@ -87,7 +88,7 @@ export function FloatingNavbar() {
   const links = [
     { id: 'beranda', label: 'Beranda', to: destination('beranda'), active: isActive('beranda'), current: 'location' as const },
     { id: 'periksa', label: 'Periksa', to: destination('periksa'), active: isActive('periksa')||pathname.startsWith('/scan/'), current: 'location' as const },
-    ...(identity ? [{ id: 'history', label: 'Riwayat', to: '/history', active: pathname === '/history'||pathname.startsWith('/history/'), current: 'page' as const }] : []),
+    ...(identity ? [{ id: 'history', label: 'Riwayat', to: '/history', active: isActive('history') || pathname === '/history' || pathname.startsWith('/history/'), current: isActive('history') ? 'location' as const : 'page' as const }] : []),
     { id: 'edukasi', label: 'Edukasi', to: '/education', active: isActive('edukasi')||pathname==='/education'||pathname.startsWith('/education/'), current: 'page' as const },
     { id: 'feedback', label: 'Feedback', to: '/feedback', active: pathname === '/feedback', current: 'page' as const },
   ]
@@ -98,7 +99,8 @@ export function FloatingNavbar() {
         <div className="nav-actions">
           <nav ref={desktopNav} className="desktop-nav nav-glass" aria-label="Navigasi utama"><NavIndicator nav={desktopNav} active={links.find(item => item.active)?.id} reducedMotion={reducedMotion} />{links.map((item) => <Link key={item.id} to={item.to} aria-current={item.active ? item.current : undefined}>{item.label}{item.id === 'feedback' && <ArrowUpRight size={15} aria-hidden="true" />}</Link>)}</nav>
           <button type="button" ref={trigger} className="menu-trigger nav-glass" aria-label={open ? 'Tutup menu navigasi' : 'Buka menu navigasi'} aria-expanded={open} aria-controls="mobile-navigation" onClick={() => setOpen(!open)}>{open ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}</button>
-          {identity ? <ProfileMenu key={identity.id} onOpen={() => setOpen(false)} /> : <Link to="/login" className="nav-login nav-glass" aria-label="Masuk ke akun AWASIN" title="Masuk" onClick={() => setOpen(false)}><LogIn size={20} aria-hidden="true" /></Link>}
+          {identity && <FeedbackInbox key={identity.id} owner={identity.id} onOpen={() => setOpen(false)} />}
+          {identity ? <ProfileMenu key={`profile:${identity.id}`} onOpen={() => setOpen(false)} /> : <Link to="/login" className="nav-login nav-glass" aria-label="Masuk ke akun AWASIN" title="Masuk" onClick={() => setOpen(false)}><LogIn size={20} aria-hidden="true" /></Link>}
         </div>
       </div>
       {open && <motion.nav id="mobile-navigation" className="mobile-nav nav-glass" aria-label="Navigasi mobile" initial={reducedMotion ? false : { opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reducedMotion ? 0 : 0.22 }}>

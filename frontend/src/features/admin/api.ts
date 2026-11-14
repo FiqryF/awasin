@@ -7,11 +7,11 @@ export type Page<T> = { items: T[]; total: number }
 export type Organization = { id: string; name: string; category: string; description: string; version: number }
 export type Domain = { id: string; organization_id: string; domain: string; status: string; evidence_url: string; evidence_description: string; review_note: string; reviewed_by: string | null; verified_at: string | null; version: number; created_at: string }
 export type Feedback = { id: string; category: string; status: string; preview: string; version: number; created_at: string; report_id: string | null }
-export type FeedbackDetail = Feedback & { fields: Record<string, string>; contact_email: string | null; note: string }
+export type FeedbackDetail = Feedback & { fields: Record<string, string>; contact_email: string | null; note: string; can_reply: boolean }
 export type Audit = { id: string; action: string; actor_id: string | null; entity_type: string; entity_id: string; created_at: string; metadata: Record<string, unknown> }
 export type Overview = { feedback_total: number; feedback_new: number; feedback_in_review: number; feedback_resolved: number; domains_verified: number; domains_pending: number; articles_published: number }
 export function auditLabel(action: string) {
-  const labels: Record<string,string> = {'feedback_handling.update':'Penanganan Feedback diperbarui','registry_domains.insert':'Kandidat domain ditambahkan','registry_domains.update':'Domain ditinjau atau diperbarui','registry_organizations.insert':'Organisasi ditambahkan','registry_organizations.update':'Organisasi diperbarui','education_articles.insert':'Draf artikel dibuat','education_articles.update':'Artikel atau publikasi diperbarui','education.seed':'Artikel asli diimpor'}
+  const labels: Record<string,string> = {'feedback_handling.update':'Penanganan Feedback diperbarui','feedback_replies.insert':'Balasan feedback dikirim','registry_domains.insert':'Kandidat domain ditambahkan','registry_domains.update':'Domain ditinjau atau diperbarui','registry_organizations.insert':'Organisasi ditambahkan','registry_organizations.update':'Organisasi diperbarui','education_articles.insert':'Draf artikel dibuat','education_articles.update':'Artikel atau publikasi diperbarui','education.seed':'Artikel asli diimpor'}
   return labels[action] ?? 'Perubahan administrasi'
 }
 export function useAdminData<T>(path: string) {

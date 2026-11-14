@@ -1,0 +1,65 @@
+.feedback-inbox-trigger { position: relative; }
+.feedback-inbox-unread {
+  position: absolute;
+  inset: 1px 1px auto auto;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #231718;
+  border-radius: 50%;
+  background: #ff535b;
+}
+
+.feedback-inbox {
+  position: fixed;
+  inset: var(--inbox-top, 80px) var(--inbox-right, 16px) auto auto;
+  margin: 0;
+  width: min(392px, calc(100vw - 32px));
+  max-height: min(560px, calc(100dvh - var(--inbox-top, 80px) - 16px));
+  padding: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  color: var(--color-canvas);
+  background: #191516;
+  border: 1px solid #493638;
+  border-radius: 18px;
+  box-shadow: 0 16px 48px rgb(0 0 0 / 45%);
+}
+.feedback-inbox::backdrop { background: rgb(0 0 0 / 22%); }
+.feedback-inbox > header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px 10px 20px;
+  background: #211819;
+  border-bottom: 1px solid #493638;
+}
+.feedback-inbox h2 { font-size: 1rem; font-weight: 700; }
+.feedback-inbox h2:focus:not(:focus-visible) { outline: none; }
+.feedback-inbox > header button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  color: #cec4b8;
+  cursor: pointer;
+}
+.feedback-inbox > header button:hover { background: rgb(245 255 233 / 9%); color: var(--color-canvas); }
+.feedback-inbox-body { padding: 16px; font-size: .875rem; overflow-wrap: anywhere; }
+.feedback-inbox-body ul { display: grid; gap: 12px; }
+.feedback-inbox-body li { padding: 14px; border: 1px solid #493638; border-radius: 12px; background: #231b1c; }
+.feedback-inbox-meta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; color: #cec4b8; font-size: .75rem; }
+.feedback-inbox-meta span { color: #ffb7b2; font-weight: 600; }
+.feedback-inbox-body h3 { margin-block: 4px 12px; font-weight: 650; }
+.feedback-inbox-author { border-top: 1px solid #493638; padding-top: 10px; color: #cec4b8; font-size: .75rem; font-weight: 650; }
+.feedback-inbox-message { margin-top: 4px; line-height: 1.55; white-space: pre-wrap; }
+.feedback-inbox-body nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.feedback-inbox-body > .button { margin-top: 12px; }
+
+@media (max-width: 600px) {
+  .feedback-inbox { inset-inline: 16px; width: auto; }
+}

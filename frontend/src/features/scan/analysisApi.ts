@@ -9,7 +9,7 @@ type TextInput =
 type MediaInput =
   | { mode: 'message'; file: File; text?: string }
   | { mode: 'qr' | 'image' | 'video'; file: File }
-export type AnalysisInput = (TextInput | MediaInput) & { request_id?: string; history_consent?: boolean }
+export type AnalysisInput = (TextInput | MediaInput) & { request_id?: string; history_consent?: boolean; message_ai_consent?: boolean; message_openrouter_consent?: boolean; message_link_consent?: boolean; message_link_enhanced_consent?: boolean }
 
 const statuses = ['completed', 'partial', 'inconclusive', 'unavailable', 'failed'] as const
 const risks = ['low', 'medium', 'high', 'unknown'] as const
@@ -58,7 +58,24 @@ type Evidence = {
   source: string; observed_at: string; severity: Risk; validation: 'verified' | 'unverified'; limitations: string[]
 }
 const aiStatuses = ['completed', 'not_requested', 'disabled', 'unavailable', 'rate_limited', 'timeout', 'validation_failed'] as const
-type HistoryStatus = 'saved' | 'disabled' | 'unavailable'
+type HistoryStatus = 'saved' | 'disabled' | 'unconfigured' | 'unavailable'
+export const ocrLabels = {
+  not_requested: 'OCR tidak digunakan', completed: 'Teks screenshot terbaca',
+  low_confidence: 'Pembacaan OCR kurang jelas. Periksa screenshot dan coba mode teks.',
+  truncated: 'Teks OCR terpotong. Gunakan screenshot yang lebih pendek atau lengkapi teks sebelum memeriksa ulang.',
+  empty: 'Tidak ada teks yang cukup terbaca.', timeout: 'OCR melewati batas waktu.',
+  unavailable: 'Tesseract belum tersedia di server.', missing_languages: 'Data bahasa Indonesia atau Inggris belum terpasang.',
+  failed: 'Screenshot tidak dapat diproses.', busy: 'OCR sedang sibuk. Coba lagi.',
+} as const
+export type MessageReport = {
+  ocr_status: keyof typeof ocrLabels
+  ai_status: typeof aiStatuses[number] | 'invalid_response'
+  analyst?: 'mistral' | 'nemotron' | null
+  fallback_status?: 'unavailable' | 'rate_limited' | 'timeout' | 'invalid_response' | null
+  links: { host: string; status: keyof typeof threatLabels | 'ambiguous'; risk?: Risk }[]
+  recommendations: string[]
+  ocr_preview?: string | null
+}
 type AIOffer = { status: 'pending'; ticket: string } | { status: 'disabled' | 'unavailable' | 'rate_limited' }
 export type AIResult = {
   history_status?: HistoryStatus | null
@@ -91,6 +108,7 @@ export type AnalysisResult = {
   history_eligible: false
   history_status?: HistoryStatus | null
   url_report?: UrlReport | null
+  message_report?: MessageReport | null
   ai?: AIOffer | null
   detector?: DetectorResult | null
   detector_offer?: AIOffer | null
@@ -126,6 +144,15 @@ function parseResult(value: unknown, mode: AnalysisMode): AnalysisResult {
       item && typeof item.id === 'string' && typeof item.explanation === 'string' && typeof item.source === 'string')
   ) throw new Error('Respons pemeriksaan tidak valid.')
   const report = result.url_report
+  const message = result.message_report
+  if (message && (mode !== 'message' || !Object.hasOwn(ocrLabels, message.ocr_status) ||
+    (message.ai_status !== 'invalid_response' && !aiStatuses.includes(message.ai_status)) ||
+    (message.analyst != null && (message.ai_status !== 'completed' || !['mistral', 'nemotron'].includes(message.analyst))) ||
+    (message.fallback_status != null && !['unavailable', 'rate_limited', 'timeout', 'invalid_response'].includes(message.fallback_status)) ||
+    !isTextList(message.recommendations) || (message.ocr_preview != null && (typeof message.ocr_preview !== 'string' || message.ocr_preview.length > 10000)) || !Array.isArray(message.links) || message.links.length > 3 ||
+    !message.links.every(link => link && typeof link.host === 'string' &&
+      (link.risk === undefined || risks.includes(link.risk)) &&
+      (link.status === 'ambiguous' || Object.hasOwn(threatLabels, link.status))))) throw new Error('Respons pemeriksaan tidak valid.')
   if (report && (
     typeof report.display_url !== 'string' ||
     (report.registered_domain !== null && typeof report.registered_domain !== 'string') ||

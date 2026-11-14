@@ -93,3 +93,18 @@ def test_account_export_includes_only_own_confirmed_feedback(history_api):
     assert data['format_version'] == 2 and len(data['feedback']) == 1
     assert 'submission_key' not in data['feedback'][0] and 'owner_id' not in data['feedback'][0]
     assert data['feedback'][0]['id'] == state['feedback'][0]['id']
+
+
+def test_feedback_inbox_requires_session_and_returns_public_reply_fields(history_api):
+    client, headers, state = history_api
+    path = '/api/v1/feedback/replies'
+    assert client.get(path).status_code == 401
+    assert not state['requests']
+    row = {'id': str(uuid4()), 'feedback_id': str(uuid4()), 'category': 'bug',
+           'feedback_title': 'Tampilan Feedback', 'feedback_created_at': '2026-11-13T01:00:00Z',
+           'message': 'Perbaikan sudah tersedia.', 'created_at': '2026-11-14T01:00:00Z'}
+    state['feedback_replies'] = [{**row, 'id': str(uuid4()), 'note': 'Internal fixture'} for _ in range(21)]
+    response = client.get(path, headers=headers)
+    assert response.status_code == 200 and response.headers['cache-control'] == 'no-store'
+    assert len(response.json()['items']) == 20 and response.json()['has_more']
+    assert set(response.json()['items'][0]) == set(row)

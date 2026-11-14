@@ -1,10 +1,9 @@
-import { Link, useLocation } from 'react-router'
+import { Link } from 'react-router'
 import { motion } from 'motion/react'
 import { BrandMark } from '../ui/BrandMark'
 import { HomeBackLink } from '../ui/HomeBackLink'
 import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion'
 import type { ReactNode } from 'react'
-import { useEffect, useRef } from 'react'
 
 type AuthLayoutProps = {
   children: ReactNode
@@ -16,9 +15,6 @@ type AuthLayoutProps = {
 
 export function AuthLayout({ children, panelContent, backTo, backLabel }: Readonly<AuthLayoutProps>) {
   const reduced = usePrefersReducedMotion()
-  const main=useRef<HTMLElement>(null)
-  const {pathname}=useLocation()
-  useEffect(()=>{document.title=`${main.current?.querySelector('h1')?.textContent??'Akun'} | AWASIN`},[pathname])
 
   return (
     <div className="auth-root">
@@ -45,7 +41,7 @@ export function AuthLayout({ children, panelContent, backTo, backLabel }: Readon
       </motion.aside>
 
       {/* Sisi kanan — form */}
-      <main className="auth-panel-form" ref={main}>
+      <main className="auth-panel-form">
         {/* Header mini untuk mobile */}
         <div className="auth-form-header">
           <Link to="/" className="auth-brand">

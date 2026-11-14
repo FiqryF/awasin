@@ -44,7 +44,6 @@ def box(kind, data):
 
 
 @pytest.mark.parametrize("payload", [
-    {"mode": "message", "text": "Pesan sintetis untuk tes"},
     {"mode": "qr", "payload": "WIFI:T:WPA;S:example;P:private;;"},
     {"mode": "qr", "payload": "https://example.com"},
 ])
@@ -63,7 +62,6 @@ def test_unavailable_is_not_a_report(client, payload):
 
 
 @pytest.mark.parametrize("mode, content_type, content, metadata", [
-    ("message", "image/png", image_bytes(), {"mode": "message", "text": "Private fixture text"}),
     ("qr", "image/jpeg", image_bytes("JPEG"), {}),
     ("image", "image/webp", image_bytes("WEBP"), {}),
     # Container envelopes only. No samples are decoded or treated as real detections.

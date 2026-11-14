@@ -7,7 +7,6 @@ export class RouteBoundary extends Component<Readonly<{children:ReactNode;resetK
   declare context:ContextType<typeof AuthContext>
   state={failed:false}
   static getDerivedStateFromError(){return {failed:true}}
-  componentDidCatch(){document.title='Halaman belum dapat dibuka | AWASIN'}
   componentDidUpdate(previous:Readonly<{resetKey:string}>){
     if(previous.resetKey!==this.props.resetKey&&this.state.failed)this.setState({failed:false})
   }

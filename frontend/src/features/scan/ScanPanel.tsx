@@ -5,7 +5,7 @@ import { ScanForm } from './ScanForm'
 import { scanTypes } from './scanConfig'
 import type { ScanType } from './scanConfig'
 
-export function ScanPanel({ defaultMode = 'link' }: Readonly<{ defaultMode?: ScanType }>) {
+export function ScanPanel({ defaultMode = 'link', onHistorySaved }: Readonly<{ defaultMode?: ScanType; onHistorySaved?: () => void }>) {
   const [params,setParams]=useSearchParams()
   const { identity } = useAuth()
   const rawMode=params.get('mode')
@@ -13,5 +13,5 @@ export function ScanPanel({ defaultMode = 'link' }: Readonly<{ defaultMode?: Sca
   const selected=scanTypes.find(type=>type.id===requested)?.id??defaultMode
   const setSelected=(mode:ScanType)=>setParams(previous=>{const next=new URLSearchParams(previous);next.set('mode',mode);return next},{replace:true,preventScrollReset:true})
   const config = scanTypes.find(({ id }) => id === selected)!
-  return <div className="scan-workspace"><p className="scan-selector-label">Pilih jenis pemeriksaan</p><ScanTypeSelector selected={selected} onSelect={setSelected} /><ScanForm key={`${selected}:${identity?.id ?? 'guest'}`} config={config} ownerId={identity?.id} /></div>
+  return <div className="scan-workspace"><p className="scan-selector-label">Pilih jenis pemeriksaan</p><ScanTypeSelector selected={selected} onSelect={setSelected} /><ScanForm key={`${selected}:${identity?.id ?? 'guest'}`} config={config} ownerId={identity?.id} onHistorySaved={onHistorySaved} /></div>
 }

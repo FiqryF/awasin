@@ -4,7 +4,6 @@ import { History, Search, Trash2, ShieldCheck, Plus } from 'lucide-react'
 import { useAuth } from '../features/auth/useAuth'
 import { listHistory } from '../features/history/api'
 import { useHistoryResource } from '../features/history/useHistoryResource'
-import { DummyHistory } from '../features/history/DummyHistory'
 import { HistoryList } from '../features/history/HistoryList'
 import { DeleteHistoryDialog } from '../features/history/DeleteHistoryDialog'
 import { modeLabels } from '../features/history/contracts'
@@ -38,7 +37,6 @@ function HistoryContent({owner}:Readonly<{owner:string}>) {
       <div><label htmlFor="history-mode">Jenis pemeriksaan</label><select id="history-mode" value={mode} onChange={e=>{setMode(e.target.value as ScanMode|'');setCursors([])}}><option value="">Semua jenis</option>{Object.entries(modeLabels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></div>
       <div><label htmlFor="history-sort">Urutkan tanggal</label><select id="history-sort" value={sort} onChange={e=>{setSort(e.target.value as 'newest'|'oldest');setCursors([])}}><option value="newest">Terbaru dahulu</option><option value="oldest">Terlama dahulu</option></select></div>
     </form>
-    {import.meta.env.DEV&&!cursor&&<DummyHistory search={search} mode={mode} sort={sort}/>}
     {notice&&<output className="history-notice">{notice}</output>}
     {resource.loading&&<output className="history-loading">Memuat riwayat pemeriksaan…</output>}
     {resource.error&&<div className="history-state" role="alert"><h2>Riwayat belum dapat dimuat.</h2><p>{resource.error.message}</p><button type="button" className="button button-red" onClick={()=>setRevision(r=>r+1)}>Coba lagi</button><Link className="auth-link" to="/login" state={{returnTo:'/history'}}>Masuk kembali</Link></div>}

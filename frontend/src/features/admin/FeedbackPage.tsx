@@ -5,7 +5,30 @@ import { PageHead, State, Status, Pager, DateTime, FeedbackMessage, EditorHead }
 
 function Review({ id, close, updated }: Readonly<{ id: string; close: () => void; updated: () => void }>) {
   const resource = useAdminData<FeedbackDetail>(`feedback/${id}`)
-  return <section className="admin-editor" aria-label="Tinjau feedback"><EditorHead title="Tinjau feedback" close={close} /><State error={resource.error} loading={!resource.data} retry={resource.reload} />{resource.data && <ReviewForm key={`${id}:${resource.data.version}`} record={resource.data} updated={() => { resource.reload(); updated() }} />}</section>
+  return <section className="admin-editor" aria-label="Tinjau feedback"><EditorHead title="Tinjau feedback" close={close} /><State error={resource.error} loading={!resource.data} retry={resource.reload} />{resource.data && <ReviewForm key={`${id}:${resource.data.version}`} record={resource.data} updated={() => { resource.reload(); updated() }} />}{resource.data?.can_reply && <ReplyForm feedbackId={id} />}{resource.data?.can_reply === false && <p className="admin-footnote">Masukan ini dikirim sebagai tamu.</p>}</section>
+}
+
+function ReplyForm({ feedbackId }: Readonly<{ feedbackId: string }>) {
+  const [message, setMessage] = useState('')
+  const [replyId, setReplyId] = useState(() => crypto.randomUUID())
+  const mutation = useAdminMutation()
+
+  async function submit(event: SubmitEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!message.trim()) return
+    if (await mutation.save(`feedback/${feedbackId}/replies`, 'POST', { id: replyId, message: message.trim() })) {
+      setMessage('')
+      setReplyId(crypto.randomUUID())
+    }
+  }
+
+  return <form className="admin-publish" onSubmit={event => void submit(event)}>
+    <label>Balasan untuk pengirim<textarea value={message} required maxLength={2000} disabled={mutation.busy}
+      onChange={event => { setMessage(event.target.value); setReplyId(crypto.randomUUID()) }} /></label>
+    <p className="admin-footnote">Balasan ini akan muncul di kotak pesan akun pengirim.</p>
+    <FeedbackMessage error={mutation.error} message={mutation.message && 'Balasan terkirim ke akun pengirim.'} />
+    <button className="admin-primary" type="submit" disabled={mutation.busy || !message.trim()}>Kirim balasan</button>
+  </form>
 }
 function ReviewForm({ record, updated }: Readonly<{ record: FeedbackDetail; updated: () => void }>) {
   const [status, setStatus] = useState(record.status)

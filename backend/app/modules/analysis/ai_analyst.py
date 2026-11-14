@@ -76,6 +76,12 @@ class UrlAnalystInput(AnalystInput):
     history_report: ReportDetail | None = None
 
 
+class MessageAnalystInput(AnalystInput):
+    message: str
+    observations: dict[str, str]
+    excerpts: dict[str, str]
+
+
 PRIVATE_SEGMENTS = {"token", "tokens", "session", "secret", "key", "invite", "reset", "reset-password", "callback", "oauth", "magic-link"}
 
 
@@ -194,9 +200,10 @@ class SecurityAnalyst:
             return "rate_limited", None
         try:
             # The URL analyst receives observations without the local fallback verdict.
-            exclude = {"risk", "status", "openrouter_fallback_consent", "history_report"} if isinstance(input_data, UrlAnalystInput) else None
+            exclude = {"risk", "status", "openrouter_fallback_consent", "history_report"} if isinstance(input_data, (UrlAnalystInput, MessageAnalystInput)) else None
             payload = input_data.model_dump_json(exclude_none=True, exclude=exclude)
-            if len(payload.encode()) > MAX_INPUT_BYTES:
+            limit = 65536 if isinstance(input_data, MessageAnalystInput) else MAX_INPUT_BYTES
+            if len(payload.encode()) > limit:
                 return "unavailable", None
             async with self.slots, asyncio.timeout(TIMEOUT_SECONDS):
                 raw = await self.generator.generate(key=key, model=model, instruction=instruction, payload=payload, schema=schema)

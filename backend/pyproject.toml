@@ -16,6 +16,7 @@ dependencies = [
     "idna>=3.10,<4",
     "tldextract>=5.3,<6",
     "Pillow>=13,<14",
+    "pytesseract>=0.3.13,<0.4",
     "python-multipart>=0.0.33,<1",
     "starlette>=1.9,<2",
     "protobuf>=6.33,<8",

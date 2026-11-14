@@ -30,7 +30,7 @@ class AIExplanation(AIModel):
     limitations: list[str] = Field(default_factory=list)
     recommendations: list[str] = Field(default_factory=list)
     fallback_status: Literal["unavailable", "rate_limited", "timeout", "validation_failed"] | None = None
-    history_status: Literal['saved', 'disabled', 'unavailable'] | None = None
+    history_status: Literal['saved', 'disabled', 'unconfigured', 'unavailable'] | None = None
 
 
 class AIUrlAnalysis(AIExplanation):

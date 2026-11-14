@@ -4,6 +4,8 @@
 from contextlib import asynccontextmanager
 import logging
 from pathlib import Path
+from app.modules.analysis.message import MessageAnalyzer
+from app.modules.analysis.message_ocr import MessageOCR
 
 import httpx
 from fastapi import FastAPI
@@ -181,6 +183,11 @@ def create_app(settings: Settings | None = None) -> ASGIApp:
                     )
                 },
                 timeout=16,
+            )
+            api.state.analysis.adapters['message'] = MessageAnalyzer(
+                api.state.security_analyst, api.state.analysis.adapters['link'],
+                MessageOCR(settings.tesseract_cmd, Path(settings.tesseract_data_dir) if settings.tesseract_data_dir else None),
+                backup_analyst=api.state.backup_analyst,
             )
 
             yield

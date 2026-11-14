@@ -26,6 +26,8 @@ def admin_api(settings):
             return httpx.Response(200,json={'items':[],'total':0})
         if request.url.path.endswith('/rpc/admin_mutate'):
             return httpx.Response(200,json={'id':RECORD,'version':2})
+        if request.url.path.endswith('/rpc/send_feedback_reply'):
+            return httpx.Response(200,json=json.loads(request.content)['p_id'])
         return httpx.Response(200,json=[],headers={'content-range':'*/0'})
     config=settings.model_copy(update={'supabase_url':'https://test.supabase.co','supabase_publishable_key':SecretStr('fixture')})
     provider_client=httpx.AsyncClient(transport=httpx.MockTransport(respond))
@@ -130,3 +132,19 @@ def test_mutation_user_rejected_even_with_role_payload(admin_api):
     state['role']='user'
     assert client.post('/api/v1/admin/organizations',json={'name':'test','category':'test','role':'admin'},headers=headers).status_code==403
     assert not state['calls']
+
+
+def test_admin_sends_reply_only_for_reviewed_feedback_id(admin_api):
+    client, state, headers = admin_api
+    path = f'/api/v1/admin/feedback/{RECORD}/replies'
+    payload = {'id': ADMIN, 'message': 'Perbaikan sudah tersedia.'}
+    state['role'] = 'user'
+    assert client.post(path, headers=headers, json=payload).status_code == 403
+    state['role'] = 'admin'
+    assert client.post(path, headers=headers, json={**payload, 'owner_id': ADMIN}).status_code == 422
+    assert not state['calls']
+    response = client.post(path, headers=headers, json=payload)
+    assert response.status_code == 201 and response.json() == {'id': ADMIN}
+    assert json.loads(state['calls'][-1].content) == {
+        'p_id': ADMIN, 'p_feedback_id': RECORD, 'p_message': payload['message'],
+    }

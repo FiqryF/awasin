@@ -7,6 +7,9 @@ import { RouteBoundary } from '../src/components/common/RouteBoundary'
 import { Footer } from '../src/components/layout/Footer'
 import { FloatingNavbar } from '../src/components/layout/FloatingNavbar'
 import { AuthContext } from '../src/features/auth/context'
+import { accountRequest } from '../src/features/settings/api'
+
+vi.mock('../src/features/settings/api', () => ({ accountRequest: vi.fn() }))
 
 let cleanup:(()=>void)|undefined
 beforeEach(()=>{
@@ -15,7 +18,7 @@ beforeEach(()=>{
  vi.stubGlobal('matchMedia',vi.fn(()=>({matches:true,addEventListener:vi.fn(),removeEventListener:vi.fn()})))
  window.scrollTo=vi.fn();Element.prototype.scrollIntoView=vi.fn()
  HTMLDialogElement.prototype.showModal=function(){this.open=true}
- HTMLDialogElement.prototype.close=function(){this.open=false}
+ HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new Event('close'))}
 })
 afterEach(async()=>{if(cleanup)await act(async()=>cleanup?.());cleanup=undefined;vi.restoreAllMocks();vi.unstubAllGlobals()})
 async function render(content:ReactNode,path='/education/phishing'){
@@ -25,6 +28,34 @@ async function render(content:ReactNode,path='/education/phishing'){
  return {host,draw:async(next:ReactNode)=>{await act(async()=>draw(next))}}
 }
 async function click(element:Element){await act(async()=>{element.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,button:0}))})}
+
+it('shows feedback replies next to the profile only for a signed-in account', async () => {
+ const identity={id:'fixture',email:'fixture@example.invalid',role:'user' as const,aal:'aal1' as const,profile:{id:'fixture',display_name:'Fixture'}}
+ localStorage.removeItem('awasin:feedback-seen:fixture')
+ const reply={id:'reply',category:'bug',feedback_title:'Tampilan Feedback',message:'Perbaikan sudah tersedia.',created_at:'2026-11-14T01:00:00Z',feedback_created_at:'2026-11-13T01:00:00Z'}
+ vi.mocked(accountRequest).mockResolvedValue({items:[reply],has_more:false})
+ const {host,draw}=await render(<FloatingNavbar/>)
+ expect(host.querySelector('[aria-label="Pesan feedback"]')).toBeNull()
+ await draw(<AuthContext.Provider value={{identity,loading:false,error:'',refresh:async()=>identity}}><FloatingNavbar/></AuthContext.Provider>)
+ const button=host.querySelector('[aria-label="Pesan feedback, ada balasan baru"]')!
+ expect(button.querySelector('.feedback-inbox-unread')).not.toBeNull()
+ expect(button.nextElementSibling?.querySelector('[aria-label="Menu akun"]')).not.toBeNull()
+ await click(button)
+ expect(accountRequest).toHaveBeenCalledWith('/feedback/replies?offset=0','GET',undefined,expect.any(AbortSignal),identity.id)
+ const dialog=document.querySelector<HTMLDialogElement>('.feedback-inbox')!
+ expect(dialog.open).toBe(true)
+ expect(dialog.textContent).toContain('Perbaikan sudah tersedia.')
+ expect(dialog.textContent).toContain('Tampilan Feedback')
+ await click(dialog.querySelector('[aria-label="Tutup pesan"]')!)
+ expect(dialog.open).toBe(false)
+ expect(button.querySelector('.feedback-inbox-unread')).toBeNull()
+ expect(localStorage.getItem('awasin:feedback-seen:fixture')).toBe(reply.id)
+ vi.mocked(accountRequest).mockResolvedValueOnce({items:[{ ...reply, id:'new-reply' },reply],has_more:false})
+ await act(async()=>{window.dispatchEvent(new Event('focus'))})
+ expect(button.querySelector('.feedback-inbox-unread')).not.toBeNull()
+ vi.mocked(accountRequest).mockReset()
+ localStorage.removeItem('awasin:feedback-seen:fixture')
+})
 it('provides safe route-error recovery without displaying internal exception details',async()=>{
  vi.spyOn(console,'error').mockImplementation(()=>{})
  function Failure():never{throw new Error('private-fixture-error')}
@@ -35,11 +66,12 @@ it('provides safe route-error recovery without displaying internal exception det
  await draw(<RouteBoundary resetKey="second"><p>Recovered content</p></RouteBoundary>)
  expect(host.textContent).toBe('Recovered content')
 })
-it('announces headings arriving after a lazy loading placeholder',async()=>{
+it('announces headings after lazy loading and preserves the AWASIN tab title',async()=>{
+ document.title='AWASIN'
  function Delayed(){const [ready,setReady]=useState(false);return <><RouteAnnouncer/><main id="main-content"><button onClick={()=>setReady(true)}>Load fixture</button>{ready?<h1>Halaman siap dibaca</h1>:<p>Memuat…</p>}</main></>}
  const {host}=await render(<Delayed/>)
  await click(host.querySelector('button')!)
- expect(document.title).toBe('Halaman siap dibaca | AWASIN')
+ expect(document.title).toBe('AWASIN')
  expect(host.querySelector('[aria-live="polite"]')?.textContent).toBe('Halaman siap dibaca')
 })
 it('makes privacy readable from the shared footer and restores focus after closing',async()=>{

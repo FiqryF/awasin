@@ -35,7 +35,14 @@ class UrlRequest(RequestContext):
     defer_detector: StrictBool = False
 
 
-class MessageRequest(RequestContext):
+class MessageOptions(AnalysisModel):
+    message_ai_consent: StrictBool = False
+    message_openrouter_consent: StrictBool = False
+    message_link_consent: StrictBool = False
+    message_link_enhanced_consent: StrictBool = False
+
+
+class MessageRequest(RequestContext, MessageOptions):
     mode: Literal["message"]
     text: str = Field(min_length=1, max_length=10000)
 
@@ -48,13 +55,14 @@ class QrRequest(RequestContext):
 TextRequest = Annotated[UrlRequest | MessageRequest | QrRequest, Field(discriminator="mode")]
 
 
-class MediaRequest(RequestContext):
+class MediaRequest(RequestContext, MessageOptions):
     mode: MediaMode
     text: str | None = Field(default=None, max_length=10000)
 
     @model_validator(mode="after")
     def allow_message_text_only(self):
-        if self.text is not None and self.mode != "message":
+        if self.mode != "message" and (self.text is not None or self.message_ai_consent or self.message_link_consent
+                                       or self.message_link_enhanced_consent or self.message_openrouter_consent):
             raise ValueError("Text is only accepted for a message screenshot")
         return self
 
@@ -117,6 +125,22 @@ class UrlReport(AnalysisModel):
     registry_snapshot_used: bool = False
 
 
+class MessageLink(AnalysisModel):
+    host: ShortText
+    status: Literal['not_requested', 'ambiguous', 'match', 'no_match', 'unavailable', 'unsupported', 'timeout', 'rate_limited', 'invalid_response']
+    risk: Risk = "unknown"
+
+
+class MessageReport(AnalysisModel):
+    ocr_status: Literal['not_requested', 'completed', 'low_confidence', 'truncated', 'empty', 'timeout', 'unavailable', 'missing_languages', 'failed', 'busy']
+    ai_status: Literal['not_requested', 'disabled', 'unavailable', 'rate_limited', 'timeout', 'invalid_response', 'completed'] = 'not_requested'
+    analyst: Literal['mistral', 'nemotron'] | None = None
+    fallback_status: Literal['unavailable', 'rate_limited', 'timeout', 'invalid_response'] | None = None
+    links: list[MessageLink] = Field(default_factory=list, max_length=3)
+    recommendations: list[Explanation] = Field(default_factory=list, max_length=5)
+    ocr_preview: str | None = Field(default=None, max_length=10000)
+
+
 class EngineResult(AnalysisModel):
     status: Literal["completed", "partial", "inconclusive"]
     risk: Risk = "unknown"
@@ -125,6 +149,7 @@ class EngineResult(AnalysisModel):
     provenance: Provenance
     limitations: list[Explanation] = Field(default_factory=list, max_length=20)
     url_report: UrlReport | None = None
+    message_report: MessageReport | None = None
 
     @model_validator(mode="after")
     def require_evidence_for_risk(self):
@@ -152,8 +177,9 @@ class AnalysisResponse(AnalysisModel):
     error_code: ErrorCode | None = None
     media: MediaMetadata | None = None
     history_eligible: Literal[False] = False
-    history_status: Literal['saved', 'disabled', 'unavailable'] | None = None
+    history_status: Literal['saved', 'disabled', 'unconfigured', 'unavailable'] | None = None
     url_report: UrlReport | None = None
+    message_report: MessageReport | None = None
     ai: AIOffer | None = None
     detector: DetectorResult | None = None
     detector_offer: AIOffer | None = None

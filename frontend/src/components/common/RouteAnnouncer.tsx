@@ -10,11 +10,11 @@ export function RouteAnnouncer() {
     const changedPage = previousPath.current !== pathname
     previousPath.current = pathname
     let anchored=false
-    let title=''
+    let lastHeading=''
     function update(){
       const heading=document.querySelector<HTMLElement>('main h1')
       const next=(heading?.innerText??heading?.textContent??'Memuat halaman').replace(/\s+/g,' ').trim()
-      if(next!==title){title=next;document.title=`${next} | AWASIN`;if(announcement.current)announcement.current.textContent=next}
+      if(next!==lastHeading){lastHeading=next;if(announcement.current)announcement.current.textContent=next}
       const target=hash?document.getElementById(hash.slice(1)):null
       if(target&&!anchored){
         anchored=true

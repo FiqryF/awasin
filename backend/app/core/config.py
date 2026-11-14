@@ -70,6 +70,8 @@ class Settings(BaseSettings):
     verified_domain_snapshot: str | None = None
     mistral_api_key: SecretStr | None = None
     mistral_model: str = "ministral-8b-latest"
+    tesseract_cmd: str = "tesseract"
+    tesseract_data_dir: str | None = None
     awasin_ai_enabled: bool = False
     ai_threat_detector_enabled: bool = False
     openrouter_api_key: SecretStr | None = None
