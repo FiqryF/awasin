@@ -10,6 +10,8 @@ type RegisteredUser = {
   created_at: string
 }
 
+const roleLabels = { admin: 'Administrator', user: 'Pengguna' }
+
 export function UsersPage() {
   const [offset, setOffset] = useState(0)
   const resource = useAdminData<Page<RegisteredUser>>(`users?offset=${offset}`)
@@ -23,7 +25,7 @@ export function UsersPage() {
         <tbody>{resource.data.items.map(user => <tr key={user.id}>
           <td><strong>{user.display_name || 'Belum diisi'}</strong></td>
           <td>{user.email ?? '—'}</td>
-          <td>{user.role === 'admin' ? 'Administrator' : user.role === 'user' ? 'Pengguna' : '—'}</td>
+          <td>{user.role ? roleLabels[user.role] ?? '—' : '—'}</td>
           <td><DateTime value={user.created_at} /></td>
         </tr>)}</tbody>
       </table></div>

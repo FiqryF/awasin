@@ -222,14 +222,13 @@
   .url-risk h4 { font-size: clamp(1.1rem, 3.2cqi, 1.65rem); line-height: 1.16; letter-spacing: -.025em; }
   .url-risk p { margin-top: 7px; }
   .url-threat-category { display: flex; gap: 7px; align-items: flex-start; color: var(--url-accent); font-weight: 650; }
-  .url-actions ul, .url-ai-report ul, .url-technical ul { display: grid; gap: 6px; margin-top: 8px; }
+  .url-actions ul, .url-ai-report ul, .url-technical ul { display: grid; gap: 6px; margin-top: 8px; list-style: disc; padding-inline-start: 1.25rem; }
   .url-findings ol { display: grid; gap: 12px; list-style: decimal; margin-top: 10px; padding-inline-start: 1.5rem; }
   .url-findings li { padding-inline-start: 4px; }
   .url-findings li::marker { color: var(--url-muted); font-weight: 650; }
   .url-findings p { margin-top: 2px; }
   .url-findings code { background: rgb(255 228 218 / 9%); border-radius: 4px; padding-inline: 4px; }
   .url-ai-heading svg { color: #e8b8ad; }
-  .url-actions ul, .url-ai-report ul, .url-technical ul { list-style: disc; padding-inline-start: 1.25rem; }
   .url-ai-report { display: grid; gap: 9px; border: 1px solid var(--url-border); border-radius: 14px; padding: 14px; background: rgb(255 228 218 / 5%); }
   .url-ai-report ul { margin-top: 0; }
   .url-detector-report [role="status"] > strong { display: block; font-size: clamp(1.15rem, 4cqi, 1.5rem); }

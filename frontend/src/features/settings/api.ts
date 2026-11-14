@@ -33,8 +33,14 @@ export async function accountRequest(path: string, method = 'GET', payload?: unk
   return response.json()
 }
 export function parsePreferences(value: unknown): Preferences {
-  if (!value || typeof value !== 'object' || !('history_retention' in value) || !('animation' in value) || !['manual','disabled'].includes(String(value.history_retention)) || !['system','reduced'].includes(String(value.animation))) throw new Error('Respons preferensi tidak valid.')
-  return value as Preferences
+  if (!value || typeof value !== 'object' || !('history_retention' in value) || !('animation' in value)) {
+    throw new Error('Respons preferensi tidak valid.')
+  }
+  const { history_retention, animation } = value
+  if ((history_retention !== 'manual' && history_retention !== 'disabled') || (animation !== 'system' && animation !== 'reduced')) {
+    throw new Error('Respons preferensi tidak valid.')
+  }
+  return { history_retention, animation }
 }
 export async function getPreferences(signal?: AbortSignal, owner?: string) { return parsePreferences(await accountRequest('/account/preferences', 'GET', undefined, signal, owner)) }
 export async function savePreferences(value: Preferences, owner?: string) { return parsePreferences(await accountRequest('/account/preferences', 'PATCH', value, undefined, owner)) }

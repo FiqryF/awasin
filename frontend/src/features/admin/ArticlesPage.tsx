@@ -6,7 +6,6 @@ import { PageHead, State, Status, Pager, DateTime, FeedbackMessage, EditorHead, 
 import { cmsEnabled } from '../education/useEducation'
 import { articles as defaultArticles } from '../education/articles'
 import {
-  type ArticleContent,
   type ArticleRecord,
   emptyArticle,
   editorContent,
@@ -18,7 +17,7 @@ import {
   type EditorContent,
 } from './articleTypes'
 
-export type { ArticleContent, ArticleRecord }
+export type { ArticleContent, ArticleRecord } from './articleTypes'
 
 const fallbackArticles: ArticleRecord[] = defaultArticles.map(article => ({
   id: `article-${article.slug}`,
@@ -43,9 +42,8 @@ export function ArticleEditor({ record, close, updated }: Readonly<{ record: Art
   const mutation = useAdminMutation()
   const set = <K extends keyof EditorContent>(key: K, value: EditorContent[K]) => setContent(old => ({ ...old, [key]: value }))
   async function save() {
-    const finalSlug = content.slug.trim()
-      ? (record ? content.slug : generateSlug(content.slug))
-      : generateSlug(content.title)
+    const slugInput = content.slug.trim() ? content.slug : content.title
+    const finalSlug = record && content.slug.trim() ? content.slug : generateSlug(slugInput)
     const payload = {
       content: {
         ...articleContent(content),
