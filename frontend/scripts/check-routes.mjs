@@ -28,7 +28,7 @@ try {
   const fixtureIdentity = { id: 'ssr-fixture', email: 'local@example.invalid', role: 'admin', aal: 'aal2', profile: { id: 'ssr-fixture', display_name: 'SSR fixture' } }
   const expectedPaths = ['/settings']
   assert.deepEqual(placeholderRoutes.map(({ path }) => path), expectedPaths)
-  const adminPaths = [{path:'/admin/dashboard',title:'Kendali yang terukur.'},{path:'/admin/feedback',title:'Dengarkan. Tinjau. Tindak lanjuti.'},{path:'/admin/domains',title:'Referensi, dengan bukti.'},{path:'/admin/articles',title:'Pengetahuan yang bisa dipercaya.'},{path:'/admin/audit',title:'Setiap perubahan, tercatat.'}]
+  const adminPaths = [{path:'/admin/dashboard',title:'Kendali yang terukur.'},{path:'/admin/feedback',title:'Dengarkan. Tinjau. Tindak lanjuti.'},{path:'/admin/articles',title:'Pengetahuan yang bisa dipercaya.'},{path:'/admin/articles/fixture/edit',title:'Edit artikel'},{path:'/admin/announcements',title:'Pengumuman Layanan'},{path:'/admin/domains',title:'Halaman tidak ditemukan'},{path:'/admin/audit',title:'Halaman tidak ditemukan'}]
   await runSequentially(adminPaths,async ({path,title})=>{
     const html=await renderPage(createElement(AuthContext.Provider,{value:{loading:false,identity:fixtureIdentity,error:'',refresh:async()=>fixtureIdentity}},createElement(FixtureRouter,{initialEntries:[path]},createElement(AppRoutes))))
     assert.ok(html.includes(title)&&html.includes('admin-shell'),`Missing admin workspace: ${path}`)
@@ -36,7 +36,7 @@ try {
     assert.ok(!html.includes('floating-header')&&!html.includes('<video'),'Admin must use its own layout')
     console.log(`PASS ${path}`)
   })
-  await runSequentially([{ path: '/', title: 'Jangan asal klik.' }, { path: '/dashboard', title: 'Selamat datang kembali' }, { path: '/feedback', title: 'Ada yang perlu' }, {path:'/education',title:'Kenali modusnya.'}, {path:'/education/phishing',title:'Cermati link, bukan hanya tampilannya.'}, {path:'/education/tidak-ada',title:'Artikel tidak ditemukan.'}, { path: '/history', title: 'Riwayat Pemeriksaanmu.' }, { path: '/history/tidak-valid', title: 'Detail Hasil Pemeriksaan' }, ...['link', 'message', 'website', 'qr', 'media'].map(mode => ({ path: `/scan/${mode}`, title: 'Periksa konten mencurigakan.' })), ...placeholderRoutes, { path: '/tidak-ada', title: 'Halaman tidak ditemukan' }], async ({ path, title }) => {
+  await runSequentially([{ path: '/', title: 'Jangan asal klik.' }, { path: '/dashboard', title: 'Selamat datang kembali' }, { path: '/feedback', title: 'Ada yang perlu' }, {path:'/education',title:'Kenali modusnya.'}, {path:'/education/phishing',title:'Cermati link, bukan hanya tampilannya.'}, {path:'/education/tidak-ada',title:'Artikel tidak ditemukan.'}, { path: '/history', title: 'Riwayat Pemeriksaanmu.' }, { path: '/history/tidak-valid', title: 'Detail Hasil Pemeriksaan' }, ...['link', 'message', 'website', 'qr'].map(mode => ({ path: `/scan/${mode}`, title: 'Periksa konten mencurigakan.' })), ...placeholderRoutes, { path: '/tidak-ada', title: 'Halaman tidak ditemukan' }], async ({ path, title }) => {
     // The root now redirects verified accounts; render its public content as a guest.
     const pageIdentity = path === '/' ? null : fixtureIdentity
     const html = await renderPage(createElement(AuthContext.Provider, { value: { loading: false, identity: pageIdentity, error: '', refresh: async () => pageIdentity } }, createElement(FixtureRouter, { initialEntries: [path] }, createElement(AppRoutes))))
@@ -49,20 +49,20 @@ try {
     }
     if (path === '/') {
       for (const id of ['beranda', 'periksa', 'edukasi']) assert.ok(html.includes(`id="${id}"`), `Missing section: ${id}`)
-      assert.equal((html.match(/role="tab"/g) ?? []).length, 5)
+      assert.equal((html.match(/role="tab"/g) ?? []).length, 3)
       assert.ok(html.includes('href="/education"'))
       assert.ok(html.includes('href="#periksa"'))
     }
     if (path === '/dashboard') {
       for (const id of ['beranda', 'periksa', 'edukasi']) assert.ok(html.includes(`id="${id}"`), `Missing dashboard section: ${id}`)
       assert.ok(html.includes('SSR fixture'), 'Dashboard must use verified profile name')
-      assert.equal((html.match(/role="tab"/g) ?? []).length, 5)
+      assert.equal((html.match(/role="tab"/g) ?? []).length, 3)
       assert.ok(html.includes('Memuat aktivitas pemeriksaan'), 'History must load real account records')
       assert.ok(html.includes('Menu akun') && !html.includes('Masuk ke akun AWASIN'), 'Authenticated navbar must expose profile instead of login')
     }
     if (path === '/scan/website') {
       assert.ok(html.includes('id="tab-link"') && !html.includes('id="tab-website"'))
-      assert.equal((html.match(/role="tab"/g) ?? []).length, 5)
+      assert.equal((html.match(/role="tab"/g) ?? []).length, 3)
     }
     console.log(`PASS ${path}`)
   })

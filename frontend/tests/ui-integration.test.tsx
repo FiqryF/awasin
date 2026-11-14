@@ -8,6 +8,8 @@ import { Footer } from '../src/components/layout/Footer'
 import { FloatingNavbar } from '../src/components/layout/FloatingNavbar'
 import { AuthContext } from '../src/features/auth/context'
 import { accountRequest } from '../src/features/settings/api'
+import { AnnouncementsProvider } from '../src/features/announcements/AnnouncementsProvider'
+import { HeroSection } from '../src/sections/HeroSection'
 
 vi.mock('../src/features/settings/api', () => ({ accountRequest: vi.fn() }))
 
@@ -55,6 +57,31 @@ it('shows feedback replies next to the profile only for a signed-in account', as
  expect(button.querySelector('.feedback-inbox-unread')).not.toBeNull()
  vi.mocked(accountRequest).mockReset()
  localStorage.removeItem('awasin:feedback-seen:fixture')
+})
+it('shares the active announcement between the hero and the signed-in inbox', async () => {
+ const identity={id:'announcement-fixture',email:'fixture@example.invalid',role:'user' as const,aal:'aal1' as const,profile:{id:'announcement-fixture',display_name:'Fixture'}}
+ const message='Pemeliharaan layanan terjadwal.'
+ const now=Date.now()
+ const fetchAnnouncements=vi.fn().mockResolvedValue(Response.json([
+  {id:'active',message,starts_at:new Date(now-60_000).toISOString(),ends_at:new Date(now+60_000).toISOString()},
+  {id:'expired',message:'Pengumuman lama',starts_at:new Date(now-120_000).toISOString(),ends_at:new Date(now-60_000).toISOString()},
+ ]))
+ vi.stubGlobal('fetch',fetchAnnouncements)
+ vi.mocked(accountRequest).mockResolvedValue({items:[],has_more:false})
+ const {host}=await render(<AuthContext.Provider value={{identity,loading:false,error:'',refresh:async()=>identity}}>
+  <AnnouncementsProvider><FloatingNavbar/><HeroSection/></AnnouncementsProvider>
+ </AuthContext.Provider>)
+ expect(host.querySelector('.hero-announcements-static')?.textContent).toContain(message)
+ expect(host.textContent).not.toContain('Pengumuman lama')
+ const button=host.querySelector('[aria-label="Pesan AWASIN, ada pengumuman baru"]')!
+ await click(button)
+ const dialog=document.querySelector<HTMLDialogElement>('.feedback-inbox')!
+ expect(dialog.textContent).toContain(message)
+ await click(dialog.querySelector('[aria-label="Tutup pesan"]')!)
+ expect(button.querySelector('.feedback-inbox-unread')).toBeNull()
+ expect(fetchAnnouncements).toHaveBeenCalledTimes(1)
+ localStorage.removeItem('awasin:announcement-seen:announcement-fixture')
+ vi.mocked(accountRequest).mockReset()
 })
 it('provides safe route-error recovery without displaying internal exception details',async()=>{
  vi.spyOn(console,'error').mockImplementation(()=>{})

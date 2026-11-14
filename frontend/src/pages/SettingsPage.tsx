@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, type SubmitEvent } from 'react'
-import { Link, useSearchParams } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { LogOut, ShieldCheck, UserRound, LockKeyhole, SlidersHorizontal, ChevronRight } from 'lucide-react'
 import { useAuth } from '../features/auth/useAuth'
 import type { Identity } from '../features/auth/identity'
 import { usePreferences } from '../features/settings/context'
-import { accountExport, accountRequest, type Preferences } from '../features/settings/api'
+import { accountRequest, type Preferences } from '../features/settings/api'
 import { changeAccountPassword } from '../features/settings/changePassword'
 import { useLogout } from '../features/auth/useLogout'
+import { requireSupabase } from '../features/auth/client'
+import { createAuthActions } from '../features/auth/actions'
 import { FormField } from '../components/auth/FormField'
 import { PasswordField } from '../components/auth/PasswordField'
 import { HomeBackLink } from '../components/ui/HomeBackLink'
@@ -193,32 +195,71 @@ function PreferenceEditor({kind}:Readonly<{kind:'history'|'animation'}>) {
   return <div className="settings-preference"><label htmlFor={`settings-${kind}`}>{history?'Penyimpanan laporan baru':'Gerakan dan animasi'}</label><select id={`settings-${kind}`} disabled={busy} value={history?value.history_retention:value.animation} onChange={event=>void save(history?{...value,history_retention:event.target.value as Preferences['history_retention']}:{...value,animation:event.target.value as Preferences['animation']})}>{history?<><option value="manual">Izinkan penyimpanan</option><option value="disabled">Nonaktifkan penyimpanan baru</option></>:<><option value="system">Ikuti sistem</option><option value="reduced">Kurangi animasi</option></>}</select>{busy&&<output>Menyimpan pilihan…</output>}{error&&<p role="alert">{error}</p>}{message&&<output>{message}</output>}</div>
 }
 
-function AccountExport() {
-  const {identity}=useAuth()
-  const [busy,setBusy]=useState(false),[error,setError]=useState('')
-  const request=useRef<AbortController|null>(null)
-  useEffect(()=>()=>request.current?.abort(),[])
-  async function download(){
-    if(busy||!identity)return
-    const controller=new AbortController()
-    request.current=controller
-    setBusy(true);setError('')
-    try{
-      const blob=await accountExport(identity.id,controller.signal)
-      if(controller.signal.aborted)return
-      const url=URL.createObjectURL(blob)
-      const link=document.createElement('a')
-      link.href=url;link.download='awasin-data.json'
-      try{document.body.append(link);link.click()}
-      finally{link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}
-    }catch(error){if(!controller.signal.aborted)setError(errorMessage(error))}
-    finally{if(!controller.signal.aborted)setBusy(false)}
+function DeleteAccountAction() {
+  const { identity, refresh } = useAuth()
+  const navigate = useNavigate()
+  const [open, setOpen] = useState(false)
+  const [password, setPassword] = useState('')
+  const [confirmation, setConfirmation] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [deleted, setDeleted] = useState(false)
+  const pending = useRef(false)
+
+  function close() {
+    setOpen(false)
+    setPassword('')
+    setConfirmation('')
+    setError('')
   }
-  return <div className="settings-data-row"><div><h3>Unduh data akun</h3><p>Unduh profil, preferensi, laporan tersimpan, dan Feedback milikmu. Foto profil, file unggahan, dan kredensial autentikasi tidak disertakan.</p>{error&&<p role="alert">{error}</p>}</div><button type="button" className="button history-secondary" disabled={busy} onClick={()=>void download()}>{busy?'Menyiapkan ekspor…':'Unduh data akun'}</button></div>
+
+  async function remove() {
+    if (deleted || pending.current || !identity || !password || confirmation !== 'HAPUS') return
+    pending.current = true
+    setBusy(true)
+    setError('')
+    try {
+      const result = await accountRequest('/account/me', 'DELETE', { password, confirmation }, undefined, identity.id)
+      if (!result || typeof result !== 'object' || !('deleted' in result) || result.deleted !== true) {
+        throw new Error('Penghapusan belum dapat dikonfirmasi.')
+      }
+    } catch (error) {
+      setError(errorMessage(error))
+      return
+    } finally {
+      setPassword('')
+      pending.current = false
+      setBusy(false)
+    }
+
+    setDeleted(true)
+    const client = requireSupabase()
+    const session = await client.auth.getSession()
+    if (session.data.session?.user.id === identity.id) {
+      await createAuthActions(client, window.location.origin).logout().catch(() => undefined)
+    }
+    await refresh().catch(() => null)
+    navigate('/', { replace: true })
+  }
+
+  return <section className="settings-danger">
+    <h3>Hapus Akun Saya</h3>
+    <p>Hapus permanen akun, foto profil, preferensi, dan riwayat pemeriksaan. Feedback yang sudah dikirim tetap tersimpan tanpa terhubung ke akunmu.</p>
+    {deleted ? <output>Akun berhasil dihapus.</output> : <button type="button" className="button button-red" onClick={() => setOpen(true)}>Hapus akun</button>}
+    {open && !deleted && <SettingsDialog title="Hapus akun secara permanen?" confirmLabel={busy ? 'Menghapus…' : 'Hapus akun permanen'}
+      busy={busy} confirmDisabled={!password || confirmation !== 'HAPUS'} onClose={close} onConfirm={() => void remove()}>
+      <p>Masukkan kata sandi saat ini dan ketik <strong>HAPUS</strong> untuk mengonfirmasi.</p>
+      <div className="settings-delete-fields">
+        <PasswordField id="account-delete-password" label="Kata sandi saat ini" value={password} onChange={setPassword} />
+        <FormField id="account-delete-confirmation" label="Ketik HAPUS" value={confirmation} maxLength={5} autoComplete="off" onChange={event => setConfirmation(event.target.value)} />
+      </div>
+      {error && <p role="alert">{error}</p>}
+    </SettingsDialog>}
+  </section>
 }
 function PrivacySettings() {
   const [deleting,setDeleting]=useState(false),[message,setMessage]=useState('')
-  return <><div className="settings-intro"><h2>Datamu, pilihanmu.</h2><p>Tentukan apakah laporan baru boleh disimpan. Pemeriksaan tautan saat masuk disimpan jika penyimpanan diizinkan. Pilihan ini berlaku untuk laporan baru.</p></div><PreferenceEditor kind="history"/><AccountExport/><div className="settings-data-row"><div><h3>Yang disimpan di akun</h3><p>Nama tampilan, email autentikasi, preferensi, serta ringkasan hasil pemeriksaan. Pesan mentah, file media, screenshot, kata sandi, OTP, dan token bukan bagian dari riwayat.</p><p>Draf Feedback berada di memori halaman. Setelah dikirim dengan persetujuan dan dikonfirmasi layanan, teks serta referensi pilihan disimpan terpisah; menghapus riwayat tidak menghapus Feedback. Data teknis autentikasi dikelola penyedia akun.</p></div></div>{message&&<output className="settings-feedback">{message}</output>}<div className="settings-data-row"><div><h3>Hapus seluruh riwayat</h3><p>Hapus permanen laporan tersimpan milik akun ini. Profil dan preferensi tidak ikut dihapus. Tidak ada file unggahan yang disimpan oleh fitur scan saat ini.</p></div><button type="button" className="button history-secondary" onClick={()=>setDeleting(true)}>Hapus riwayat</button></div><div className="settings-danger"><h3>Hapus Akun Saya</h3><p>Belum tersedia. Penghapusan harus mencakup identitas autentikasi, profil, preferensi, dan laporan terkait melalui layanan tepercaya dengan verifikasi ulang. Menghapus profil saja tidak menutup akun.</p><button type="button" className="button history-secondary" disabled>Penghapusan akun belum tersedia</button></div>{deleting&&<DeleteHistoryDialog onClose={()=>setDeleting(false)} onDeleted={count=>{setDeleting(false);setMessage(`${count} laporan berhasil dihapus.`)}}/>}</>
+  return <><div className="settings-intro"><h2>Datamu, pilihanmu.</h2><p>Tentukan apakah laporan baru boleh disimpan. Pemeriksaan tautan saat masuk disimpan jika penyimpanan diizinkan. Pilihan ini berlaku untuk laporan baru.</p></div><PreferenceEditor kind="history"/><div className="settings-data-row"><div><h3>Yang disimpan di akun</h3><p>Nama tampilan, email autentikasi, preferensi, serta ringkasan hasil pemeriksaan. Pesan mentah, file media, screenshot, kata sandi, OTP, dan token bukan bagian dari riwayat.</p><p>Draf Feedback berada di memori halaman. Setelah dikirim dengan persetujuan dan dikonfirmasi layanan, teks serta referensi pilihan disimpan terpisah; menghapus riwayat tidak menghapus Feedback. Data teknis autentikasi dikelola penyedia akun.</p></div></div>{message&&<output className="settings-feedback">{message}</output>}<div className="settings-data-row"><div><h3>Hapus seluruh riwayat</h3><p>Hapus permanen laporan tersimpan milik akun ini. Profil dan preferensi tidak ikut dihapus. Tidak ada file unggahan yang disimpan oleh fitur scan saat ini.</p></div><button type="button" className="button history-secondary" onClick={()=>setDeleting(true)}>Hapus riwayat</button></div><DeleteAccountAction/>{deleting&&<DeleteHistoryDialog onClose={()=>setDeleting(false)} onDeleted={count=>{setDeleting(false);setMessage(`${count} laporan berhasil dihapus.`)}}/>}</>
 }
 
 function PreferenceSettings() {

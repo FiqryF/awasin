@@ -20,10 +20,12 @@ const DashboardPage = lazy(() => import('../pages/DashboardPage').then(module =>
 const AdminLayout = lazy(() => import('../features/admin/AdminLayout').then(module => ({default:module.AdminLayout})))
 const AdminOverview = lazy(() => import('../features/admin/OverviewPage').then(module => ({default:module.OverviewPage})))
 const AdminFeedback = lazy(() => import('../features/admin/FeedbackPage').then(module => ({default:module.AdminFeedbackPage})))
-const AdminDomains = lazy(() => import('../features/admin/DomainsPage').then(module => ({default:module.DomainsPage})))
+const AdminFeedbackReview = lazy(() => import('../features/admin/FeedbackPage').then(module => ({default:module.FeedbackReviewPage})))
 const AdminArticles = lazy(() => import('../features/admin/ArticlesPage').then(module => ({default:module.ArticlesPage})))
 const AdminArticleCreate = lazy(() => import('../features/admin/ArticleCreatePage').then(module => ({default:module.ArticleCreatePage})))
-const AdminAudit = lazy(() => import('../features/admin/AuditPage').then(module => ({default:module.AuditPage})))
+const AdminArticleEdit = lazy(() => import('../features/admin/ArticlesPage').then(module => ({default:module.ArticleEditPage})))
+const AdminAnnouncements = lazy(() => import('../features/admin/AnnouncementsPage').then(module => ({default:module.AnnouncementsPage})))
+const AdminUsers = lazy(() => import('../features/admin/UsersPage').then(module => ({default:module.UsersPage})))
 const ScanHistoryPage = lazy(() => import('../pages/ScanHistoryPage').then(module => ({default:module.ScanHistoryPage})))
 const AnalysisDetailPage = lazy(() => import('../pages/AnalysisDetailPage').then(module => ({default:module.AnalysisDetailPage})))
 import { ScanWorkspacePage } from '../pages/ScanWorkspacePage'
@@ -45,10 +47,12 @@ export function AppRoutes() {
         <Route index element={<Navigate to="/admin/dashboard" replace />} />
         <Route path="dashboard" element={<AdminOverview />} />
         <Route path="feedback" element={<AdminFeedback />} />
-        <Route path="domains" element={<AdminDomains />} />
+        <Route path="feedback/:id" element={<AdminFeedbackReview />} />
         <Route path="articles" element={<AdminArticles />} />
         <Route path="articles/new" element={<AdminArticleCreate />} />
-        <Route path="audit" element={<AdminAudit />} />
+        <Route path="articles/:id/edit" element={<AdminArticleEdit />} />
+        <Route path="announcements" element={<AdminAnnouncements />} />
+        <Route path="users" element={<AdminUsers />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route></Route>
 
@@ -62,7 +66,7 @@ export function AppRoutes() {
         <Route path="/scan/message" element={<ScanWorkspacePage mode="message"/>}/>
         <Route path="/scan/website" element={<ScanWorkspacePage mode="link"/>}/>
         <Route path="/scan/qr" element={<ScanWorkspacePage mode="qr"/>}/>
-        <Route path="/scan/media" element={<ScanWorkspacePage mode="image"/>}/>
+        <Route path="/scan/media" element={<Navigate to="/scan/link" replace />}/>
         <Route element={<ProtectedRoute/>}><Route path="/history" element={<ScanHistoryPage/>}/><Route path="/history/:id" element={<AnalysisDetailPage/>}/></Route>
         <Route element={<ProtectedRoute />}><Route path="/dashboard" element={<DashboardPage />} /></Route>
         {placeholderRoutes.map(({ path, title, access }) => (

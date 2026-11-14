@@ -6,9 +6,9 @@ import { AuthContext } from '../src/features/auth/context'
 import { ProtectedRoute } from '../src/features/auth/ProtectedRoute'
 import { AdminLayout } from '../src/features/admin/AdminLayout'
 import { OverviewPage } from '../src/features/admin/OverviewPage'
-import { AdminFeedbackPage } from '../src/features/admin/FeedbackPage'
+import { AdminFeedbackPage, FeedbackReviewPage } from '../src/features/admin/FeedbackPage'
 import { DomainsPage } from '../src/features/admin/DomainsPage'
-import { ArticlesPage } from '../src/features/admin/ArticlesPage'
+import { ArticlesPage, ArticleEditPage } from '../src/features/admin/ArticlesPage'
 import { ArticleCreatePage } from '../src/features/admin/ArticleCreatePage'
 import { AuditPage } from '../src/features/admin/AuditPage'
 import { articles } from '../src/features/education/articles'
@@ -26,6 +26,7 @@ beforeEach(()=>{
  HTMLDialogElement.prototype.showModal=vi.fn(function(this:HTMLDialogElement){this.open=true})
  HTMLDialogElement.prototype.close=vi.fn(function(this:HTMLDialogElement){this.open=false})
  mock.request.mockImplementation(async(path:string)=>{
+  if(path==='/admin/detection-quality')return {too_safe:3,too_risky:1,unreviewed:2,since:'2026-11-01T00:00:00Z'}
   if(path==='/admin/overview')return {feedback_total:4,feedback_new:2,feedback_in_review:1,feedback_resolved:1,domains_verified:0,domains_pending:0,articles_published:4}
   if(path.startsWith('/admin/feedback/'))return feedback
   if(path.startsWith('/admin/feedback?'))return {items:[feedback],total:1}
@@ -38,7 +39,7 @@ afterEach(async()=>{if(cleanup)await act(async()=>cleanup?.());cleanup=undefined
 async function render(content:React.ReactNode,role:'admin'|'user'|null='admin'){
  const host=document.createElement('div');document.body.append(host);const root=createRoot(host)
  const account=role?{...identity,role}:null
- await act(async()=>root.render(<AuthContext.Provider value={{identity:account,loading:false,error:'',refresh:async()=>account}}><MemoryRouter initialEntries={['/admin/dashboard']}><Routes><Route element={<ProtectedRoute admin/>}><Route path="/admin" element={<AdminLayout/>}><Route path="dashboard" element={content}/><Route path="articles" element={<ArticlesPage/>}/><Route path="articles/new" element={<ArticleCreatePage/>}/></Route></Route><Route path="/login" element={<p>LOGIN</p>}/></Routes></MemoryRouter></AuthContext.Provider>))
+ await act(async()=>root.render(<AuthContext.Provider value={{identity:account,loading:false,error:'',refresh:async()=>account}}><MemoryRouter initialEntries={['/admin/dashboard']}><Routes><Route element={<ProtectedRoute admin/>}><Route path="/admin" element={<AdminLayout/>}><Route path="dashboard" element={content}/><Route path="feedback" element={<AdminFeedbackPage/>}/><Route path="feedback/:id" element={<FeedbackReviewPage/>}/><Route path="articles" element={<ArticlesPage/>}/><Route path="articles/new" element={<ArticleCreatePage/>}/><Route path="articles/:id/edit" element={<ArticleEditPage/>}/></Route></Route><Route path="/login" element={<p>LOGIN</p>}/></Routes></MemoryRouter></AuthContext.Provider>))
  cleanup=()=>{root.unmount();host.remove()};return host
 }
 async function click(host:ParentNode,text:string){const button=[...host.querySelectorAll('button')].find(b=>b.textContent===text)!;expect(button).toBeTruthy();await act(async()=>button.click())}
@@ -52,7 +53,11 @@ it('shows only actual response metrics and accessible admin navigation',async()=
  const host=await render(<OverviewPage/>)
  expect(host.querySelector('h1')?.textContent).toBe('Kendali yang terukur.')
  expect(host.textContent).toContain('Pengelola Fixture')
- expect(host.querySelectorAll('nav[aria-label="Navigasi administrator"] a')).toHaveLength(5)
+ expect([...host.querySelectorAll('nav[aria-label="Navigasi administrator"] a')].map(link => link.textContent))
+  .toEqual(['Ringkasan', 'Feedback', 'Konten edukasi', 'Pengumuman layanan', 'Pengguna terdaftar'])
+ expect(mock.request.mock.calls.map(([path]) => path)).toEqual(['/admin/overview','/admin/detection-quality'])
+ expect(host.querySelector('.admin-quality-ring')?.textContent).toBe('4')
+ expect(host.querySelector('.admin-quality')?.textContent).toContain('Dinilai terlalu aman 3')
  expect(host.querySelector('a[aria-current="page"]')?.textContent).toContain('Ringkasan')
  expect(host.querySelector('.floating-header')).toBeNull()
  expect(host.querySelector('video')).toBeNull()
@@ -69,6 +74,8 @@ it('shows API failure honestly and retries',async()=>{
 it('renders feedback as inert text and saves only handling data with a version',async()=>{
  const host=await render(<AdminFeedbackPage/>)
  await click(host,'Tinjau')
+ expect(host.querySelector('h1')?.textContent).toBe('Tinjau feedback')
+ expect(host.querySelector('table')).toBeNull()
  expect(host.textContent).toContain('<script>window.compromised=true</script>')
  expect(host.querySelector('script')).toBeNull()
  expect(host.querySelector('details')?.textContent).toContain('private@example.invalid')
@@ -102,6 +109,8 @@ it('opens confirmation before archiving a domain candidate',async()=>{
 it('preserves article slug, previews inert content, and requires publish confirmation',async()=>{
  const host=await render(<ArticlesPage/>)
  await click(host,'Edit')
+ expect(host.querySelector('h1')?.textContent).toBe('Edit artikel')
+ expect(host.querySelector('table')).toBeNull()
  const slug=[...host.querySelectorAll('label')].find(l=>l.textContent?.startsWith('Slug URL'))?.querySelector('input')
  expect(slug?.readOnly).toBe(true)
  await click(host,'Pratinjau')

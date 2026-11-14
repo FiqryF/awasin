@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { MessageSquare, X } from 'lucide-react'
+import { Megaphone, MessageSquare, X } from 'lucide-react'
 import { accountRequest } from '../settings/api'
 import { feedbackCategories, type FeedbackCategory } from './feedbackModel'
+import { useAnnouncements } from '../announcements/useAnnouncements'
 import './feedback-inbox.css'
 
 type Reply = {
@@ -22,6 +23,7 @@ function readSeen(key: string) {
 }
 
 export function FeedbackInbox({ owner, onOpen }: Readonly<{ owner: string; onOpen: () => void }>) {
+  const announcements = useAnnouncements()
   const dialog = useRef<HTMLDialogElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
@@ -32,7 +34,17 @@ export function FeedbackInbox({ owner, onOpen }: Readonly<{ owner: string; onOpe
   const seenKey = `awasin:feedback-seen:${owner}`
   const [seenId, setSeenId] = useState(() => readSeen(seenKey))
   const [latestId, setLatestId] = useState<string | null>(null)
-  const hasUnread = !open && latestId !== null && latestId !== seenId
+  const announcementKey = `awasin:announcement-seen:${owner}`
+  const [seenAnnouncements, setSeenAnnouncements] = useState(() => readSeen(announcementKey))
+  const activeIds = announcements.map(item => item.id).sort().join(',')
+  const hasUnreadAnnouncement = !open && announcements.some(item => !seenAnnouncements?.split(',').includes(item.id))
+  const hasUnreadReply = !open && latestId !== null && latestId !== seenId
+
+  useEffect(() => {
+    if (open && activeIds) {
+      try { localStorage.setItem(announcementKey, activeIds) } catch { /* Storage may be disabled. */ }
+    }
+  }, [open, activeIds, announcementKey])
 
   useEffect(() => {
     if (open) return
@@ -108,22 +120,34 @@ export function FeedbackInbox({ owner, onOpen }: Readonly<{ owner: string; onOpe
 
   return <>
     <button ref={trigger} type="button" className="nav-login nav-glass feedback-inbox-trigger"
-      aria-label={hasUnread ? 'Pesan feedback, ada balasan baru' : 'Pesan feedback'}
-      title="Pesan feedback" aria-haspopup="dialog" aria-expanded={open} onClick={show}>
+      aria-label={hasUnreadAnnouncement ? 'Pesan AWASIN, ada pengumuman baru' : hasUnreadReply ? 'Pesan feedback, ada balasan baru' : 'Pesan feedback'}
+      title="Balasan dan pengumuman AWASIN" aria-haspopup="dialog" aria-expanded={open} onClick={show}>
       <MessageSquare size={20} aria-hidden="true" />
-      {hasUnread && <span className="feedback-inbox-unread" aria-hidden="true" />}
+      {(hasUnreadAnnouncement || hasUnreadReply) && <span className="feedback-inbox-unread" aria-hidden="true" />}
     </button>
-    {createPortal(<dialog ref={dialog} className="feedback-inbox" aria-labelledby="feedback-inbox-title" onClose={() => {
+    {typeof document !== 'undefined' && createPortal(<dialog ref={dialog} className="feedback-inbox" aria-labelledby="feedback-inbox-title" onClose={() => {
       if (!dialog.current?.open) {
         setOpen(false)
+        if (activeIds) setSeenAnnouncements(activeIds)
         trigger.current?.focus()
       }
     }}>
       <header>
-        <h2 id="feedback-inbox-title" tabIndex={-1} autoFocus>Pesan Feedback</h2>
+        <h2 id="feedback-inbox-title" tabIndex={-1} autoFocus><MessageSquare size={18} aria-hidden="true" /> Pesan AWASIN</h2>
         <button type="button" aria-label="Tutup pesan" onClick={() => dialog.current?.close()}><X size={18} aria-hidden="true" /></button>
       </header>
       <div className="feedback-inbox-body" aria-live="polite">
+        {announcements.length > 0 && <section aria-labelledby="inbox-announcements-title">
+          <h3 id="inbox-announcements-title" className="feedback-inbox-section-title"><Megaphone size={16} aria-hidden="true" /> Pengumuman layanan</h3>
+          <ul className="feedback-inbox-announcements">
+          {announcements.map(item => <li key={item.id}>
+            <p className="feedback-inbox-message">{item.message}</p>
+            <p className="feedback-inbox-expiry">Tayang sampai <time dateTime={item.ends_at}>{date.format(new Date(item.ends_at))}</time></p>
+          </li>)}
+          </ul>
+        </section>}
+        <section aria-labelledby="inbox-replies-title">
+        <h3 id="inbox-replies-title" className="feedback-inbox-section-title">Balasan feedback</h3>
         {error ? <><p>{error}</p><button className="button button-glass" type="button" onClick={() => {
           setError('')
           setRevision(value => value + 1)
@@ -134,7 +158,7 @@ export function FeedbackInbox({ owner, onOpen }: Readonly<{ owner: string; onOpe
                 <span>{feedbackCategories.find(category => category.id === reply.category)?.title}</span>
                 <time dateTime={reply.created_at}>{date.format(new Date(reply.created_at))}</time>
               </div>
-              <h3>{reply.feedback_title}</h3>
+              <h4>{reply.feedback_title}</h4>
               <p className="feedback-inbox-author">Tim AWASIN</p>
               <p className="feedback-inbox-message">{reply.message}</p>
             </li>)}
@@ -143,6 +167,7 @@ export function FeedbackInbox({ owner, onOpen }: Readonly<{ owner: string; onOpe
           <button className="button button-glass" type="button" disabled={!page || offset === 0} onClick={() => changePage(offset - 20)}>Sebelumnya</button>
           <button className="button button-glass" type="button" disabled={!page?.has_more} onClick={() => changePage(offset + 20)}>Berikutnya</button>
         </nav>}
+        </section>
       </div>
     </dialog>, document.body)}
   </>

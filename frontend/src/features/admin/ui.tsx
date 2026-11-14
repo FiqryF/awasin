@@ -4,7 +4,7 @@ import { X, ArrowLeft, ArrowRight } from 'lucide-react'
 const statusLabels: Record<string, string> = { new: 'Baru', in_review: 'Ditinjau', resolved: 'Selesai', pending_review: 'Menunggu tinjauan', verified: 'Terverifikasi', rejected: 'Ditolak', archived: 'Diarsipkan', draft: 'Draf', published: 'Terbit' }
 export function Status({ value }: Readonly<{ value: string }>) { return <span className={`admin-status admin-status-${value}`}>{statusLabels[value] ?? value}</span> }
 export function DateTime({ value }: Readonly<{ value: string }>) { return <time dateTime={value}>{new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))}</time> }
-export function PageHead({ title, description, children }: Readonly<{ title: string; description: string; children?: ReactNode }>) { return <header className="admin-page-head"><div><p className="admin-eyebrow">AWASIN / PENGELOLAAN</p><h1>{title}</h1><p>{description}</p></div>{children}</header> }
+export function PageHead({ title, description, children }: Readonly<{ title: string; description: string; children?: ReactNode }>) { return <header className="admin-page-head"><div><h1>{title}</h1><p>{description}</p></div>{children}</header> }
 export function State({ error, loading, empty, retry }: Readonly<{ error?: string; loading?: boolean; empty?: boolean; retry: () => void }>) {
   if (error) return <div className="admin-state"><p role="alert">{error}</p><button type="button" onClick={retry}>Muat ulang</button></div>
   if (loading) return <output className="admin-state">Memuat data pengelolaan…</output>

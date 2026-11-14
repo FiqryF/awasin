@@ -1,5 +1,7 @@
 import { ShieldAlert, ShieldCheck, ShieldQuestion } from 'lucide-react'
+import { checkLabels, freshnessLabels, specificityLabels, threatLabels, verdictLabels } from './analysisApi'
 import type { AIState, AnalysisResult } from './analysisApi'
+import { ScanResultDetails } from './ScanResultDetails'
 
 const riskLabels = {
   high: 'Berbahaya — Risiko tinggi',
@@ -34,6 +36,8 @@ export function UrlAnalysisReport({ result, ai }: Readonly<{
   const coverage = coverageOf(report)
   const finalAnalysis = ai?.status === 'completed' && ai.risk != null ? ai : null
   const risk = finalAnalysis?.risk ?? result.risk
+  const recommendations = finalAnalysis?.recommendations.length ? finalAnalysis.recommendations : report.recommendations
+  const findings = finalAnalysis?.findings.length ? finalAnalysis.findings : result.evidence
   const historyStatus = (ai && 'history_status' in ai ? ai.history_status : null) ?? result.history_status
   const elevated = risk === 'high' || risk === 'medium'
   const RiskIcon = elevated ? ShieldAlert : risk === 'low' ? ShieldCheck : ShieldQuestion
@@ -59,6 +63,20 @@ export function UrlAnalysisReport({ result, ai }: Readonly<{
             ? 'Penyimpanan Riwayat dinonaktifkan di pengaturan akun.' : historyStatus === 'unconfigured'
               ? 'Penyimpanan Riwayat belum dikonfigurasi di server.' : 'Hasil belum dapat disimpan ke Riwayat.'}
         </p>}
+        <ScanResultDetails recommendations={recommendations} findings={findings}>
+          <section>
+            <h5>Sumber pemeriksaan</h5>
+            <ul>
+              <li><strong>{report.threat_provider}</strong> · {threatLabels[report.threat_status]}</li>
+              {report.supplementary_checks?.map((check, index) => <li key={`${check.provider}-${index}`}>
+                <strong>{check.provider}</strong> · {checkLabels[check.status]}
+                {check.specificity && ` · ${specificityLabels[check.specificity]}`}
+                {check.verdict && ` · ${verdictLabels[check.verdict]}`}
+                {check.freshness && ` · ${freshnessLabels[check.freshness]}`}
+              </li>)}
+            </ul>
+          </section>
+        </ScanResultDetails>
       </div>
     </section>
   )

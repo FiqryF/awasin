@@ -1,8 +1,8 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, Literal
 from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Response
-from pydantic import Field
+from pydantic import AwareDatetime, BaseModel, Field, field_validator, model_validator
 from starlette.exceptions import HTTPException
 from app.modules.identity.router import access_token, administrator, service
 from app.modules.identity.service import Identity, IdentityService
@@ -23,9 +23,72 @@ def admin_service(response: Response, token: Annotated[str, Depends(access_token
 Admin = Annotated[AdminService, Depends(admin_service)]
 
 
+@router.get('/users')
+async def registered_users(admin: Admin, offset: Offset = 0, limit: Limit = 20):
+    return await admin.rpc('admin_registered_users', {'p_offset': offset, 'p_limit': limit})
+
+
 @router.get('/overview')
 async def overview(admin: Admin):
     return await admin.rpc('admin_overview', {})
+
+
+@router.get('/detection-quality')
+async def detection_quality(admin: Admin):
+    since = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=29)
+    counts = await admin.rpc('admin_detection_quality', {'p_since': since.isoformat()})
+    return {**counts, 'since': since.isoformat()}
+
+
+class AnnouncementInput(BaseModel):
+    message: str = Field(min_length=1, max_length=240)
+    starts_at: AwareDatetime
+    ends_at: AwareDatetime
+
+    @field_validator('message', mode='before')
+    @classmethod
+    def trim_message(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+    @model_validator(mode='after')
+    def validate_schedule(self):
+        if self.ends_at <= self.starts_at or self.ends_at <= datetime.now(timezone.utc):
+            raise ValueError('Waktu selesai harus setelah waktu mulai dan belum berlalu.')
+        return self
+
+
+@router.get('/announcements')
+async def announcements(admin: Admin, offset: Offset = 0, limit: Limit = 20):
+    return await admin.page('service_announcements', offset, limit, {})
+
+
+@router.post('/announcements', status_code=201)
+async def create_announcement(payload: AnnouncementInput, admin: Admin):
+    result = await admin.provider.request('POST', '/rest/v1/service_announcements', admin.token,
+        prefer='return=representation', json=payload.model_dump(mode='json'))
+    return result.json()[0]
+
+
+@router.patch('/announcements/{record_id}')
+async def disable_announcement(record_id: UUID, admin: Admin):
+    result = await admin.provider.request('PATCH', '/rest/v1/service_announcements', admin.token,
+        prefer='return=representation', params={'id': f'eq.{record_id}'}, json={'enabled': False})
+    rows = result.json()
+    if not rows:
+        raise HTTPException(404)
+    return rows[0]
+
+
+announcements_router = APIRouter(tags=['Pengumuman layanan'])
+
+
+@announcements_router.get('/announcements')
+async def active_announcements(response: Response, provider: Annotated[IdentityService, Depends(service)]):
+    response.headers['Cache-Control'] = 'no-store'
+    result = await provider.request('GET', '/rest/v1/service_announcements', params={
+        'select': 'id,message,starts_at,ends_at', 'order': 'starts_at.desc,id.desc', 'limit': '20',
+    })
+    return result.json()
 
 
 @router.get('/feedback')

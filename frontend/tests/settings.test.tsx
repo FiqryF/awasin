@@ -66,14 +66,36 @@ it('preserves profile input on failure and refreshes global identity after confi
  expect(mock.refresh).toHaveBeenCalledTimes(1)
  expect(host.querySelector('output')?.textContent).toContain('berhasil disimpan')
 })
-it('persists explicit privacy choices and keeps account deletion unavailable',async()=>{
+it('persists explicit privacy choices and omits the account export control',async()=>{
  const host=await render('/settings?section=privacy')
  const select=host.querySelector<HTMLSelectElement>('#settings-history')!
  await act(async()=>{select.value='disabled';select.dispatchEvent(new Event('change',{bubbles:true}))})
  expect(mock.update).toHaveBeenCalledWith({history_retention:'disabled',animation:'system'})
- expect(button(host,'Penghapusan akun belum tersedia').disabled).toBe(true)
+ expect(host.textContent).not.toContain('Unduh data akun')
  expect(host.querySelector('dialog')).toBeNull()
  expect(mock.request).not.toHaveBeenCalled()
+})
+it('requires explicit confirmation and leaves the session active until deletion is confirmed',async()=>{
+ const host=await render('/settings?section=privacy')
+ await click(button(host,'Hapus akun'))
+ const dialog=document.querySelector('dialog')!
+ const confirm=button(dialog,'Hapus akun permanen')
+ expect(confirm.disabled).toBe(true)
+ await input(dialog.querySelector('#account-delete-password')!,'fixture-current')
+ expect(confirm.disabled).toBe(true)
+ await input(dialog.querySelector('#account-delete-confirmation')!,'HAPUS')
+ mock.request.mockResolvedValueOnce({})
+ await click(confirm)
+ expect(mock.request).toHaveBeenCalledWith('/account/me','DELETE',{password:'fixture-current',confirmation:'HAPUS'},undefined,identity.id)
+ expect(dialog.querySelector('[role="alert"]')?.textContent).toContain('belum dapat dikonfirmasi')
+ expect(mock.signOut).not.toHaveBeenCalled()
+
+ await input(dialog.querySelector('#account-delete-password')!,'fixture-current')
+ mock.request.mockResolvedValueOnce({deleted:true})
+ mock.session.mockResolvedValueOnce({data:{session:{user:{id:identity.id}}},error:null})
+ await click(confirm)
+ expect(mock.signOut).toHaveBeenCalledTimes(1)
+ expect(testRouter.state.location.pathname).toBe('/')
 })
 it('requires valid matching passwords before contacting the provider',async()=>{
  await expect(changeAccountPassword(identity,'fixture-current','short','short')).rejects.toThrow('Minimal 8')

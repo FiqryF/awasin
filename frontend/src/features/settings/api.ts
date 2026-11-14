@@ -3,6 +3,10 @@ import { API_BASE_URL } from '../../services/api'
 
 export type Preferences = { history_retention: 'manual' | 'disabled'; animation: 'system' | 'reduced' }
 function responseError(path: string, status: number) {
+  if (path === '/account/me') {
+    if (status === 403) return 'Verifikasi gagal. Periksa kata sandi dan pastikan verifikasi dua langkah sudah selesai jika aktif.'
+    if (status === 429) return 'Terlalu banyak percobaan. Tunggu sebentar lalu coba lagi.'
+  }
   if (path.startsWith('/admin/')) {
     if (status === 409) return 'Data sudah ada atau berubah sejak dibuka. Muat ulang sebelum menyimpan lagi.'
     if (status === 422) return 'Periksa format, panjang isian, bukti, dan transisi status. Perubahan belum tersimpan.'
@@ -17,10 +21,11 @@ export async function accountRequest(path: string, method = 'GET', payload?: unk
   const { data, error } = await requireSupabase().auth.getSession()
   if (error || !data.session) throw new Error('Sesi berakhir. Silakan masuk kembali.')
   if(owner&&data.session.user.id!==owner)throw new Error('Akun aktif telah berubah. Muat ulang halaman sebelum melanjutkan.')
+  const timeout = AbortSignal.timeout(path === '/account/me' ? 40000 : 15000)
   let response: Response
   try {
     response = await fetch(`${API_BASE_URL}/api/v1${path}`, { method, cache: 'no-store', credentials: 'omit',
-      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
       headers: { Authorization: `Bearer ${data.session.access_token}`, ...(payload ? { 'Content-Type': 'application/json' } : {}) },
       ...(payload ? { body: JSON.stringify(payload) } : {}) })
   } catch { throw new Error('Layanan akun tidak dapat dihubungi. Periksa koneksi dan coba lagi.') }

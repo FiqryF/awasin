@@ -16,30 +16,39 @@ async function mutate(kind, id, data, version = null) {
 try {
   await db.exec(`create role anon; create role authenticated; create role service_role;
   create schema auth;
-  create table auth.users(id uuid primary key,raw_user_meta_data jsonb default '{}',email_confirmed_at timestamptz default now(),is_anonymous boolean default false,banned_until timestamptz);
+  create table auth.users(id uuid primary key,email text,created_at timestamptz default now(),raw_user_meta_data jsonb default '{}',email_confirmed_at timestamptz default now(),is_anonymous boolean default false,banned_until timestamptz);
   create table auth.sessions(id uuid primary key,user_id uuid references auth.users(id),not_after timestamptz);
   create table auth.mfa_factors(user_id uuid,status text,factor_type text);
   create function auth.uid() returns uuid language sql stable as $$select (current_setting('request.jwt.claims',true)::jsonb->>'sub')::uuid$$;
   create function auth.jwt() returns jsonb language sql stable as $$select current_setting('request.jwt.claims',true)::jsonb$$;
   grant usage on schema auth to anon,authenticated;`)
-  await runSequentially(['202610230001_identity.sql', '202610230002_scan_history.sql', '202610230003_account_preferences.sql', '202610230004_feedback.sql', '202610290005_admin_workspace.sql', '202610290006_education_seed.sql', '202611140009_feedback_replies.sql'], async file => {
+  await runSequentially(['202610230001_identity.sql', '202610230002_scan_history.sql', '202610230003_account_preferences.sql', '202610230004_feedback.sql', '202610290005_admin_workspace.sql', '202610290006_education_seed.sql', '202611140009_feedback_replies.sql', '202611140010_admin_quality_announcements.sql'], async file => {
     await db.exec(await readFile(new URL(`../../supabase/migrations/${file}`, import.meta.url), 'utf8'))
   })
   await db.query('insert into auth.users(id) values($1),($2)', [admin, user])
+  await db.exec(await readFile(new URL('../../supabase/migrations/202611140011_admin_registered_users.sql', import.meta.url), 'utf8'))
+  await db.query('update auth.users set email=$1 where id=$2', ['fixture@example.invalid', user])
+  await db.query('insert into auth.users(id,is_anonymous) values(gen_random_uuid(),true)')
   await db.query('insert into auth.sessions(id,user_id) values($1,$2),($3,$4)', [sa,admin,su,user])
   await db.query("update public.user_roles set role='admin' where user_id=$1", [admin])
   await as('anon', null, null)
   assert.equal((await db.query('select * from public.education_articles')).rows.length, 4)
   await assert.rejects(db.query('select public.admin_overview()'), /permission denied/)
+  await assert.rejects(db.query('select public.admin_registered_users()'), /permission denied/)
   await assert.rejects(db.query('select * from public.admin_audit_events'), /permission denied/)
   await as('authenticated', user, su)
   await assert.rejects(db.query('select public.admin_overview()'), /insufficient_privilege|insufficient privilege/)
+  await assert.rejects(db.query('select public.admin_registered_users()'), /insufficient/)
   await assert.rejects(() => mutate('organization', null, {name:'Spoofed',category:'Test'}), /insufficient/)
   assert.equal((await db.query('select * from public.registry_domains')).rows.length, 0)
   assert.equal((await db.query('select * from public.feedback_handling')).rows.length, 0)
   assert.equal((await db.query('select * from public.admin_audit_events')).rows.length, 0)
   await assert.rejects(db.query("insert into public.admin_audit_events(action,entity_type,entity_id) values('spoof','test',$1)",[admin]), /permission denied/)
   await as('authenticated', admin, sa)
+  const {result: users} = (await db.query('select public.admin_registered_users() result')).rows[0]
+  assert.equal(users.total, 2)
+  assert.equal(users.items.find(account => account.id === user).email, 'fixture@example.invalid')
+  assert.deepEqual(Object.keys(users.items[0]).sort(), ['created_at','display_name','email','id','role'])
   const organization = await mutate('organization', null, {name:'Local fixture organization',category:'Fixture',description:''})
   const data = { organization_id:organization.id, domain:'example.com', evidence_url:'https://example.com/evidence', evidence_description:'Local fixture evidence only; never a live verification claim.',status:'verified',reviewed_by:user }
   const domain = await mutate('domain', null, data)
@@ -102,6 +111,27 @@ try {
   assert.deepEqual((await db.query('select id from public.feedback_replies')).rows, [{id: reply}])
   assert.ok(replies[0].feedback_created_at)
   assert.equal((await db.query('select * from public.my_feedback_replies(20)')).rows.length, 0)
+  await assert.rejects(db.query('select public.admin_detection_quality(now())'), /insufficient/)
+  await assert.rejects(db.query("insert into public.service_announcements(message, starts_at, ends_at) values('User cannot publish', now(), now() + interval '1 hour')"), /row-level security/)
+  await db.query(`select public.submit_feedback(gen_random_uuid(), 'detection',
+    '{"errorType":"Konten berisiko dinilai aman","description":"Fixture laporan deteksi pengguna"}', null, null, true)`)
+  await as('authenticated',admin,sa)
+  const quality = (await db.query("select public.admin_detection_quality(now() - interval '30 days') result")).rows[0].result
+  assert.deepEqual(quality, {too_safe:1, too_risky:0, unreviewed:1})
+  const detection = (await db.query("select public.admin_feedback_page(0, 20, 'detection', '', 'Konten berisiko dinilai aman') result")).rows[0].result
+  assert.equal(detection.total, quality.too_safe)
+  const active = (await db.query(`insert into public.service_announcements(message, starts_at, ends_at)
+    values('Active fixture', now() - interval '1 minute', now() + interval '1 hour') returning id`)).rows[0].id
+  await db.query(`insert into public.service_announcements(message, starts_at, ends_at)
+    values('Future fixture', now() + interval '1 hour', now() + interval '2 hours'),
+          ('Expired fixture', now() - interval '2 hours', now() - interval '1 hour')`)
+  await as('anon',null,null)
+  assert.deepEqual((await db.query('select message from public.service_announcements')).rows, [{message:'Active fixture'}])
+  await as('authenticated',admin,sa)
+  await db.query('update public.service_announcements set enabled=false where id=$1', [active])
+  await as('anon',null,null)
+  assert.equal((await db.query('select id from public.service_announcements')).rows.length, 0)
+  await as('authenticated',user,su)
   await assert.rejects(db.query("update public.feedback_replies set message='spoofed'"), /permission denied/)
   assert.equal((await db.query('select * from public.feedback_handling')).rows.length,0)
   assert.equal((await db.query('select * from public.admin_audit_events')).rows.length,0)

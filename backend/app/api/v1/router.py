@@ -7,6 +7,7 @@ from app.modules.identity.router import router as identity_router
 from app.modules.history.router import router as history_router
 from app.modules.analysis.router import router as analysis_router
 from app.modules.admin.router import router as admin_router, public_router as education_router
+from app.modules.admin.router import announcements_router
 
 router = APIRouter()
 router.include_router(account_router)
@@ -17,3 +18,4 @@ router.include_router(history_router)
 router.include_router(analysis_router)
 router.include_router(admin_router)
 router.include_router(education_router)
+router.include_router(announcements_router)

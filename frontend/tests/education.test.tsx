@@ -32,7 +32,7 @@ it('offers recovery from an unknown slug without inventing content',async()=>{
 })
 it('renders icon-only back button in top bar and arrow-free explore button',async()=>{
  const host=await render()
- const backLink=host.querySelector('.education-top-bar a.home-back-link')
+ const backLink=host.querySelector('.education-hero-kicker a.home-back-link')
  expect(backLink).not.toBeNull()
  expect(backLink?.getAttribute('href')).toBe('/#edukasi')
  expect(backLink?.querySelector('svg')).not.toBeNull()

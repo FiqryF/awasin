@@ -9,6 +9,7 @@
 .education-page > .education-hero { display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; gap: clamp(32px, 5vw, 72px); margin-bottom: 72px; }
 .education-eyebrow { display: flex; align-items: center; gap: 9px; font-size: .6875rem; font-weight: 650; letter-spacing: .14em; color: #c8d0be; }
 .education-hero-copy { max-width: 960px; }
+.education-hero-kicker { display: flex; align-items: center; gap: 14px; }
 .education-hero-copy h1 { margin-top: 24px; font-size: clamp(2.5rem, 4.2vw, 4.25rem); line-height: 1.1; }
 .education-hero-copy h1 span { color: #c8d0be; }
 .education-hero-copy > p:not(.education-eyebrow) { margin-top: 24px; line-height: 1.85; color: #c8d0be; max-width: 52ch; font-size: .9375rem; }

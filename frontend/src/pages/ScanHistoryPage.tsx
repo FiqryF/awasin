@@ -1,3 +1,4 @@
+import { HomeBackLink } from '../components/ui/HomeBackLink'
 import { useCallback, useState, type SubmitEvent } from 'react'
 import { Link } from 'react-router'
 import { History, Search, Trash2, ShieldCheck, Plus } from 'lucide-react'
@@ -31,7 +32,7 @@ function HistoryContent({owner}:Readonly<{owner:string}>) {
   const filtered=Boolean(search||mode)
   return <section className="history-page" aria-labelledby="history-title">
     <div className="history-ambient" aria-hidden="true"/>
-    <header className="history-page-heading"><div><span className="history-eyebrow"><History size={16} aria-hidden="true"/>JEJAK PEMERIKSAAN AWASIN</span><h1 id="history-title">Riwayat Pemeriksaanmu.</h1><p>Lihat kembali hasil pemeriksaan yang tersimpan di akunmu.</p><p className="history-privacy-note"><ShieldCheck size={16} aria-hidden="true"/>Riwayat pribadi · Hanya bisa diakses dari akunmu.</p></div><Link to="/dashboard#periksa" className="button button-red"><Plus size={18} aria-hidden="true"/>Pemeriksaan baru</Link></header>
+    <header className="history-page-heading"><div><div className="history-heading-kicker"><HomeBackLink to="/dashboard#beranda" label="Kembali ke dashboard" /><span className="history-eyebrow"><History size={16} aria-hidden="true"/>JEJAK PEMERIKSAAN AWASIN</span></div><h1 id="history-title">Riwayat Pemeriksaanmu.</h1><p>Lihat kembali hasil pemeriksaan yang tersimpan di akunmu.</p><p className="history-privacy-note"><ShieldCheck size={16} aria-hidden="true"/>Riwayat pribadi · Hanya bisa diakses dari akunmu.</p></div><Link to="/dashboard#periksa" className="button button-red"><Plus size={18} aria-hidden="true"/>Pemeriksaan baru</Link></header>
     <form className="history-filters" onSubmit={submit} aria-label="Cari dan saring riwayat">
       <div className="history-search"><label htmlFor="history-search">Cari ringkasan aman</label><div><input id="history-search" value={searchInput} maxLength={80} pattern="[\p{L}\p{N}_ .\-]*" placeholder="Cari judul pemeriksaan" onChange={e=>setSearchInput(e.target.value)}/><button className="icon-button" type="submit" aria-label="Cari riwayat"><Search size={19} aria-hidden="true"/></button></div></div>
       <div><label htmlFor="history-mode">Jenis pemeriksaan</label><select id="history-mode" value={mode} onChange={e=>{setMode(e.target.value as ScanMode|'');setCursors([])}}><option value="">Semua jenis</option>{Object.entries(modeLabels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></div>

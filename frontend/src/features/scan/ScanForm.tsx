@@ -15,6 +15,7 @@ import { MessageAnalysisReport } from './MessageAnalysisReport'
 import './qr.css'
 
 const fullConsent = { threat_lookup_consent: true, enhanced_lookup_consent: true, url_ai_consent: true, openrouter_fallback_consent: true } as const
+const fullUrlConsentHelp = 'URL publik yang lolos penyaringan dapat diperiksa oleh Mistral, Nemotron melalui OpenRouter, Google, VirusTotal, dan urlscan.io. Jangan masukkan tautan berisi data pribadi atau token.'
 const messageFullConsent = {
   message_ai_consent: true,
   message_openrouter_consent: true,
@@ -108,7 +109,7 @@ export function ScanForm({ config, ownerId, onHistorySaved }: Readonly<{ config:
   async function readQr(next: File) {
     if (decoding) return
     const current = ++generation.current
-    setDecoding(true); setDecoded(null); setQrConsent(false)
+    setDecoding(true); setDecoded(null); setQrConsent(false); setConsent(false)
     try {
       const value = await decodeQr(next)
       if (current === generation.current) setDecoded(value)
@@ -117,6 +118,15 @@ export function ScanForm({ config, ownerId, onHistorySaved }: Readonly<{ config:
     } finally {
       if (current === generation.current) setDecoding(false)
     }
+  }
+
+  async function inspectQrUrl(url: string, mode: 'link' | 'website') {
+    setConsent(false)
+    await analyze({
+      mode, url,
+      ...(consent ? fullConsent : {}),
+      ...(ownerId ? { history_consent: true } : {}),
+    })
   }
 
   async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
@@ -168,6 +178,7 @@ export function ScanForm({ config, ownerId, onHistorySaved }: Readonly<{ config:
         </div>}
         {!isUrl && (!isMessage || screenshot) && <FileUpload label={isMessage ? 'Screenshot pesan' : config.fieldLabel} video={config.id === 'video'} file={file} error={error} onChange={(next) => {
           generation.current++;setDecoded(null);setDecoding(false);setQrConsent(false)
+          if (config.id === 'qr') setConsent(false)
           clearAnalysis()
           const fileError = next ? validateFile(next, config.id) : null
           if (isMessage) { setConsent(false); setMessageHistory(false) }
@@ -180,7 +191,7 @@ export function ScanForm({ config, ownerId, onHistorySaved }: Readonly<{ config:
           </label>
           <p className="input-help" id="scan-consent-help">{isMessage
             ? 'Mistral atau cadangan Nemotron via OpenRouter menganalisis teks yang disaring. Link & Web dapat memeriksa tautan publik lewat Google, VirusTotal, urlscan.io, DNS, dan RDAP. Hapus data pribadi sebelum memeriksa.'
-            : 'URL publik yang lolos penyaringan dapat diperiksa oleh Mistral, Nemotron melalui OpenRouter, Google, VirusTotal, dan urlscan.io. Jangan masukkan tautan berisi data pribadi atau token.'}</p>
+            : fullUrlConsentHelp}</p>
           <p className="input-help">{isMessage
             ? 'AWASIN bisa saja salah. Periksa kembali lewat kanal resmi sebelum membuka tautan, mengirim uang, atau membagikan data pribadi.'
             : 'AWASIN bisa saja salah. Periksa kembali lewat kanal resmi sebelum memasukkan data sensitif.'}</p>
@@ -191,24 +202,33 @@ export function ScanForm({ config, ownerId, onHistorySaved }: Readonly<{ config:
           generation.current++
           setDecoded(value)
           setQrConsent(false)
+          setConsent(false)
           setError(null)
           clearAnalysis()
         }} />}
         {error && <p id="scan-error" role="alert" className="form-error">{error}</p>}
         <div className="form-bottom">
           <p className="privacy-note"><LockKeyhole size={15} aria-hidden="true" />
-            {isMessage ? 'Teks asli dan screenshot tidak disimpan ke Riwayat.' : config.id === 'qr' ? <>Gambar QR dibaca di perangkatmu. Isi QR dikirim ke backend hanya saat kamu memilih analisis dan menyetujui pengiriman; payload tidak disimpan atau diteruskan ke provider eksternal.{ownerId && ' Ringkasan QR tidak disimpan ke Riwayat.'}</> : isUrl && ownerId ? 'Ringkasan hasil disimpan ke Riwayat jika penyimpanan aktif. URL lengkap tidak disimpan.' : 'Input dikirim ke AWASIN untuk validasi dan tidak disimpan ke Riwayat.'}
+            {isMessage ? 'Teks asli dan screenshot tidak disimpan ke Riwayat.' : config.id === 'qr' ? 'Gambar QR dibaca di perangkatmu. Pilih pemeriksaan untuk mengirim isi yang terbaca ke AWASIN.' : isUrl && ownerId ? 'Ringkasan hasil disimpan ke Riwayat jika penyimpanan aktif. URL lengkap tidak disimpan.' : 'Input dikirim ke AWASIN untuk validasi dan tidak disimpan ke Riwayat.'}
           </p>
           <button type="submit" className="button button-red" disabled={decoding || submitting}>{submitLabel} <ArrowUpRight size={19} aria-hidden="true" /></button>
         </div>
         {decoded !== null && <section className="qr-decoded" aria-labelledby="qr-decoded-title">
           <h4 id="qr-decoded-title">Isi QR Code</h4><pre>{decoded}</pre>
           <p>{decodedUrl ? 'Pembacaan QR dilakukan di perangkatmu. Tautan tidak dibuka otomatis; pemeriksaan hanya berjalan jika kamu memilih tombol berikut.' : qrPayloadGuidance(decoded)}</p>
-          {decodedUrl && <button type="button" className="button button-red" disabled={submitting} onClick={() => void analyze({
-            mode: hasHttpScheme(decoded) ? 'link' : 'website',
-            url: decodedUrl,
-            ...(ownerId ? { history_consent: true } : {}),
-          })}>Periksa tautan dari QR</button>}
+          {decodedUrl && <div className="qr-backend-consent">
+            <p className="input-help">Domain: <strong>{new URL(decodedUrl).hostname}</strong></p>
+            <label className="scan-lookup-consent">
+              <input type="checkbox" checked={consent} aria-describedby="qr-url-consent-help" onChange={event => setConsent(event.target.checked)} />
+              <span>Izinkan pemeriksaan lengkap</span>
+            </label>
+            <p className="input-help" id="qr-url-consent-help">{fullUrlConsentHelp}</p>
+            {ownerId && <p className="input-help">Ringkasan pemeriksaan tautan disimpan ke Riwayat jika penyimpanan aktif.</p>}
+            <button type="button" className="button button-red" disabled={submitting}
+              onClick={() => void inspectQrUrl(decodedUrl, hasHttpScheme(decoded) ? 'link' : 'website')}>
+              Periksa tautan dari QR
+            </button>
+          </div>}
           {decodedUrl === null && <div className="qr-backend-consent">
             <label>
               <input type="checkbox" checked={qrConsent} onChange={event => setQrConsent(event.target.checked)} />

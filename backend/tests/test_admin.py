@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 import httpx
 import pytest
@@ -22,6 +23,10 @@ def admin_api(settings):
             return httpx.Response(state['status'],json={'code':state['code'],'message':'private provider detail'})
         if request.url.path.endswith('/rpc/admin_overview'):
             return httpx.Response(200,json={'feedback_total':0})
+        if request.url.path.endswith('/rpc/admin_detection_quality'):
+            return httpx.Response(200,json={'too_safe':1,'too_risky':0,'unreviewed':1})
+        if request.url.path.endswith('/service_announcements') and request.method == 'POST':
+            return httpx.Response(201,json=[{'id':RECORD,**json.loads(request.content)}])
         if request.url.path.endswith('/rpc/admin_feedback_page'):
             return httpx.Response(200,json={'items':[],'total':0})
         if request.url.path.endswith('/rpc/admin_mutate'):
@@ -42,7 +47,7 @@ def admin_api(settings):
         yield client,state,{'Authorization':'Bearer fixture-token'}
 
 
-@pytest.mark.parametrize('path',['overview','feedback','organizations','domains','articles','audit'])
+@pytest.mark.parametrize('path',['overview','detection-quality','announcements','users','feedback','organizations','domains','articles','audit'])
 def test_admin_read_authorization(admin_api,path):
     client,state,headers=admin_api
     assert client.get('/api/v1/admin/'+path).status_code==401
@@ -52,6 +57,23 @@ def test_admin_read_authorization(admin_api,path):
     state['role']='admin'
     result=client.get('/api/v1/admin/'+path,headers=headers)
     assert result.status_code==200 and result.headers['cache-control']=='no-store'
+
+
+def test_announcements_require_admin_and_ordered_schedule(admin_api):
+    client,state,headers=admin_api
+    start=datetime.now(timezone.utc)+timedelta(hours=1)
+    end=start+timedelta(hours=1)
+    form={'message':'  Jadwal pemeliharaan.  ','starts_at':start.isoformat(),'ends_at':end.isoformat()}
+    path='/api/v1/admin/announcements'
+    state['role']='user'
+    assert client.post(path,json=form,headers=headers).status_code==403
+    state['role']='admin'
+    assert client.post(path,json={**form,'ends_at':start.isoformat()},headers=headers).status_code==422
+    assert state['calls']==[]
+    result=client.post(path,json=form,headers=headers)
+    assert result.status_code==201 and result.json()['message']=='Jadwal pemeliharaan.'
+    assert client.get('/api/v1/announcements').status_code==200
+    assert 'Authorization' not in state['calls'][-1].headers
 
 
 @pytest.mark.parametrize('raw,expected',[

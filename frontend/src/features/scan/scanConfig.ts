@@ -1,6 +1,6 @@
 import { Image, Link, MessageSquare, QrCode, Video } from 'lucide-react'
 
-export const scanTypes = [
+const scanConfigs = [
   { id: 'link', label: 'Link & Website', icon: Link, title: 'Periksa tautan atau alamat website.', description: 'Masukkan URL atau domain yang ingin diperiksa. AWASIN tidak membuka situsnya.', fieldLabel: 'URL atau domain yang ingin diperiksa' },
   { id: 'message', label: 'Pesan', icon: MessageSquare, title: 'Ada pesan yang bikin ragu?', description: 'Tempel isi pesan atau pilih screenshot. Hapus informasi pribadi yang tidak diperlukan.', fieldLabel: 'Isi pesan yang ingin diperiksa' },
   { id: 'qr', label: 'QR Code', icon: QrCode, title: 'Jangan buru-buru scan.', description: 'Unggah gambar atau pindai QR Code dengan kamera. Pembacaan lokal; pemeriksaan payload backend hanya dengan persetujuanmu.', fieldLabel: 'Gambar QR Code' },
@@ -8,9 +8,10 @@ export const scanTypes = [
   { id: 'video', label: 'AI Video', icon: Video, title: 'Yang terlihat nyata, perlu ditinjau juga.', description: 'Gambar dan video adalah dua mode dari fitur analisis keaslian media yang sama.', fieldLabel: 'Video yang ingin diperiksa' },
 ] as const
 
-export type ScanType = typeof scanTypes[number]['id']
+export const scanTypes = scanConfigs.filter(({ id }) => id !== 'image' && id !== 'video')
+export type ScanType = ScanConfig['id']
 export type AnalysisMode = ScanType | 'website'
-export type ScanConfig = typeof scanTypes[number]
+export type ScanConfig = typeof scanConfigs[number]
 export const imageTypes = ['image/jpeg', 'image/png', 'image/webp']
 export const videoTypes = ['video/mp4', 'video/webm']
 
