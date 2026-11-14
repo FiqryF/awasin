@@ -48,7 +48,7 @@ try {
   const {result: users} = (await db.query('select public.admin_registered_users() result')).rows[0]
   assert.equal(users.total, 2)
   assert.equal(users.items.find(account => account.id === user).email, 'fixture@example.invalid')
-  assert.deepEqual(Object.keys(users.items[0]).sort(), ['created_at','display_name','email','id','role'])
+  assert.deepEqual(Object.keys(users.items[0]).sort((left, right) => left.localeCompare(right)), ['created_at','display_name','email','id','role'])
   const organization = await mutate('organization', null, {name:'Local fixture organization',category:'Fixture',description:''})
   const data = { organization_id:organization.id, domain:'example.com', evidence_url:'https://example.com/evidence', evidence_description:'Local fixture evidence only; never a live verification claim.',status:'verified',reviewed_by:user }
   const domain = await mutate('domain', null, data)

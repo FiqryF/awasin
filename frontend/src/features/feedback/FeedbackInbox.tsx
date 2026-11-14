@@ -36,9 +36,12 @@ export function FeedbackInbox({ owner, onOpen }: Readonly<{ owner: string; onOpe
   const [latestId, setLatestId] = useState<string | null>(null)
   const announcementKey = `awasin:announcement-seen:${owner}`
   const [seenAnnouncements, setSeenAnnouncements] = useState(() => readSeen(announcementKey))
-  const activeIds = announcements.map(item => item.id).sort().join(',')
+  const activeIds = announcements.map(item => item.id).sort((left, right) => left.localeCompare(right)).join(',')
   const hasUnreadAnnouncement = !open && announcements.some(item => !seenAnnouncements?.split(',').includes(item.id))
   const hasUnreadReply = !open && latestId !== null && latestId !== seenId
+  let triggerLabel = 'Pesan feedback'
+  if (hasUnreadAnnouncement) triggerLabel = 'Pesan AWASIN, ada pengumuman baru'
+  else if (hasUnreadReply) triggerLabel = 'Pesan feedback, ada balasan baru'
 
   useEffect(() => {
     if (open && activeIds) {
@@ -120,7 +123,7 @@ export function FeedbackInbox({ owner, onOpen }: Readonly<{ owner: string; onOpe
 
   return <>
     <button ref={trigger} type="button" className="nav-login nav-glass feedback-inbox-trigger"
-      aria-label={hasUnreadAnnouncement ? 'Pesan AWASIN, ada pengumuman baru' : hasUnreadReply ? 'Pesan feedback, ada balasan baru' : 'Pesan feedback'}
+      aria-label={triggerLabel}
       title="Balasan dan pengumuman AWASIN" aria-haspopup="dialog" aria-expanded={open} onClick={show}>
       <MessageSquare size={20} aria-hidden="true" />
       {(hasUnreadAnnouncement || hasUnreadReply) && <span className="feedback-inbox-unread" aria-hidden="true" />}
@@ -148,11 +151,13 @@ export function FeedbackInbox({ owner, onOpen }: Readonly<{ owner: string; onOpe
         </section>}
         <section aria-labelledby="inbox-replies-title">
         <h3 id="inbox-replies-title" className="feedback-inbox-section-title">Balasan feedback</h3>
-        {error ? <><p>{error}</p><button className="button button-glass" type="button" onClick={() => {
+        {error && <><p>{error}</p><button className="button button-glass" type="button" onClick={() => {
           setError('')
           setRevision(value => value + 1)
-        }}>Coba lagi</button></> : !page ? <p>Memuat balasan…</p> : page.items.length === 0
-          ? <p>Belum ada balasan untuk feedback kamu.</p> : <ul>
+        }}>Coba lagi</button></>}
+        {!error && !page && <p>Memuat balasan…</p>}
+        {!error && page?.items.length === 0 && <p>Belum ada balasan untuk feedback kamu.</p>}
+        {!error && page && page.items.length > 0 && <ul>
             {page.items.map(reply => <li key={reply.id}>
               <div className="feedback-inbox-meta">
                 <span>{feedbackCategories.find(category => category.id === reply.category)?.title}</span>

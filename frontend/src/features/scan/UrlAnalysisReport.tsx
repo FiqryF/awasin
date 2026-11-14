@@ -1,6 +1,6 @@
 import { ShieldAlert, ShieldCheck, ShieldQuestion } from 'lucide-react'
 import { checkLabels, freshnessLabels, specificityLabels, threatLabels, verdictLabels } from './analysisApi'
-import type { AIState, AnalysisResult } from './analysisApi'
+import type { AIResult, AIState, AnalysisResult } from './analysisApi'
 import { ScanResultDetails } from './ScanResultDetails'
 
 const riskLabels = {
@@ -10,6 +10,23 @@ const riskLabels = {
   unknown: 'Belum dapat dipastikan',
 } as const
 type UrlReport = NonNullable<AnalysisResult['url_report']>
+const riskIcons = { low: ShieldCheck, medium: ShieldAlert, high: ShieldAlert, unknown: ShieldQuestion }
+const historyLabels = {
+  saved: 'Tersimpan di Riwayat.',
+  disabled: 'Penyimpanan Riwayat dinonaktifkan di pengaturan akun.',
+  unconfigured: 'Penyimpanan Riwayat belum dikonfigurasi di server.',
+  unavailable: 'Hasil belum dapat disimpan ke Riwayat.',
+}
+
+function analysisNote(finalAnalysis: AIResult | null, ai?: AIState | null) {
+  if (finalAnalysis) {
+    const analyst = finalAnalysis.analyst === 'nemotron' ? 'Nemotron' : 'Mistral'
+    return `Hasil akhir · Penilaian ${analyst} tervalidasi`
+  }
+  if (ai?.status === 'loading') return 'Hasil sementara · Menunggu analisis Mistral'
+  if (ai?.status === 'rate_limited') return 'Hasil pemeriksaan AWASIN · Batas permintaan AI tercapai'
+  return ai ? 'Hasil pemeriksaan AWASIN · Analisis AI belum menghasilkan keputusan' : 'Hasil pemeriksaan AWASIN'
+}
 
 function coverageOf(report: UrlReport) {
   const checks = report.supplementary_checks ?? []
@@ -39,30 +56,22 @@ export function UrlAnalysisReport({ result, ai }: Readonly<{
   const recommendations = finalAnalysis?.recommendations.length ? finalAnalysis.recommendations : report.recommendations
   const findings = finalAnalysis?.findings.length ? finalAnalysis.findings : result.evidence
   const historyStatus = (ai && 'history_status' in ai ? ai.history_status : null) ?? result.history_status
-  const elevated = risk === 'high' || risk === 'medium'
-  const RiskIcon = elevated ? ShieldAlert : risk === 'low' ? ShieldCheck : ShieldQuestion
+  const RiskIcon = riskIcons[risk]
+  const title = riskLabels[risk] + (risk === 'high' && report.threat_status === 'match' ? ' · Ancaman ditemukan' : '')
+  const summary = (finalAnalysis?.summary ?? result.explanation).replace(' Temuan ini belum memastikan bahwa tautan tersebut merupakan penipuan.', '')
   return (
     <section className="url-report" aria-label="Hasil Link & Website Inspector">
       <div className="url-result-card" data-risk={risk}>
         <div className="url-risk">
           <RiskIcon size={24} aria-hidden="true" />
-          <div role="status">
-            <h4>{riskLabels[risk]}{risk === 'high' && report.threat_status === 'match' ? ' · Ancaman ditemukan' : ''}</h4>
-            <p>{(finalAnalysis?.summary ?? result.explanation).replace(' Temuan ini belum memastikan bahwa tautan tersebut merupakan penipuan.', '')}</p>
+          <div>
+            <h4>{title}</h4>
+            <p><output>{summary}</output></p>
           </div>
         </div>
-        <p className="url-report-note">
-          {finalAnalysis ? `Hasil akhir · Penilaian ${finalAnalysis.analyst === 'nemotron' ? 'Nemotron' : 'Mistral'} tervalidasi`
-            : ai?.status === 'loading' ? 'Hasil sementara · Menunggu analisis Mistral'
-              : ai?.status === 'rate_limited' ? 'Hasil pemeriksaan AWASIN · Batas permintaan AI tercapai'
-                : ai ? 'Hasil pemeriksaan AWASIN · Analisis AI belum menghasilkan keputusan' : 'Hasil pemeriksaan AWASIN'}
-        </p>
+        <p className="url-report-note">{analysisNote(finalAnalysis, ai)}</p>
         <InspectionCoverage {...coverage} />
-        {historyStatus && <p className="url-report-note" role="status">
-          {historyStatus === 'saved' ? 'Tersimpan di Riwayat.' : historyStatus === 'disabled'
-            ? 'Penyimpanan Riwayat dinonaktifkan di pengaturan akun.' : historyStatus === 'unconfigured'
-              ? 'Penyimpanan Riwayat belum dikonfigurasi di server.' : 'Hasil belum dapat disimpan ke Riwayat.'}
-        </p>}
+        {historyStatus && <output className="url-report-note block">{historyLabels[historyStatus]}</output>}
         <ScanResultDetails recommendations={recommendations} findings={findings}>
           <section>
             <h5>Sumber pemeriksaan</h5>

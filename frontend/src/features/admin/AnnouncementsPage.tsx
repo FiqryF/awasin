@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type SubmitEvent } from 'react'
 import { useAdminData, useAdminMutation, type Page } from './api'
 import { DateTime, FeedbackMessage, PageHead, Pager, State } from './ui'
 import type { ServiceAnnouncement } from '../announcements/useAnnouncements'
@@ -7,6 +7,12 @@ type AdminAnnouncement = ServiceAnnouncement & { enabled: boolean }
 
 function localMinute(date: Date) {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
+}
+
+function announcementStatus(item: AdminAnnouncement, expired: boolean, now: number) {
+  if (!item.enabled) return 'Dinonaktifkan'
+  if (expired) return 'Berakhir'
+  return Date.parse(item.starts_at) > now ? 'Terjadwal' : 'Sedang tayang'
 }
 
 export function AnnouncementsPage() {
@@ -22,18 +28,21 @@ export function AnnouncementsPage() {
     return () => window.clearInterval(timer)
   }, [])
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = event.currentTarget
     const fields = new FormData(form)
-    const message = String(fields.get('message')).trim()
-    const starts = new Date(String(fields.get('starts_at')))
-    const ends = new Date(String(fields.get('ends_at')))
+    const messageField = fields.get('message')
+    const startsField = fields.get('starts_at')
+    const endsField = fields.get('ends_at')
+    const message = typeof messageField === 'string' ? messageField.trim() : ''
+    const starts = new Date(typeof startsField === 'string' ? startsField : '')
+    const ends = new Date(typeof endsField === 'string' ? endsField : '')
     if (!message) {
       setFormError('Isi pesan pengumuman terlebih dahulu.')
       return
     }
-    if (!(ends > starts)) {
+    if (Number.isNaN(starts.getTime()) || Number.isNaN(ends.getTime()) || ends <= starts) {
       setFormError('Waktu selesai harus lebih lambat dari waktu mulai. Contoh: mulai 16.15, selesai 17.15.')
       return
     }
@@ -85,7 +94,7 @@ export function AnnouncementsPage() {
         <thead><tr><th>Pesan</th><th>Jadwal tayang</th><th>Status</th><th>Tindakan</th></tr></thead>
         <tbody>{resource.data.items.map(item => {
           const expired = Date.parse(item.ends_at) <= now
-          const status = !item.enabled ? 'Dinonaktifkan' : expired ? 'Berakhir' : Date.parse(item.starts_at) > now ? 'Terjadwal' : 'Sedang tayang'
+          const status = announcementStatus(item, expired, now)
           return <tr key={item.id}>
             <td>{item.message}</td><td><DateTime value={item.starts_at} /><br /><DateTime value={item.ends_at} /></td>
             <td>{status}</td><td>{item.enabled && !expired && <button type="button" disabled={mutation.busy} onClick={() => void disable(item.id)}>Hentikan tayang</button>}</td>

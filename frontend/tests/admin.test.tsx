@@ -161,13 +161,18 @@ it('opens article create page where slug input is optional and auto-generated fr
  expect(slugInput).not.toBeNull()
  expect(slugInput?.required).toBe(false)
 
- const titleInput=[...host.querySelectorAll('label')].find(l=>l.textContent?.includes('Judul artikel'))?.querySelector('input')!
- const descInput=[...host.querySelectorAll('label')].find(l=>l.textContent?.includes('Ringkasan'))?.querySelector('textarea')!
- const catInput=[...host.querySelectorAll('label')].find(l=>l.textContent?.includes('Kategori'))?.querySelector('input')!
- const secTitle=[...host.querySelectorAll('label')].find(l=>l.textContent?.includes('Judul bagian'))?.querySelector('input')!
- const secPara=[...host.querySelectorAll('label')].find(l=>l.textContent?.includes('Paragraf'))?.querySelector('textarea')!
- const srcName=[...host.querySelectorAll('label')].find(l=>l.textContent?.includes('Nama sumber'))?.querySelector('input')!
- const srcUrl=[...host.querySelectorAll('label')].find(l=>l.textContent?.includes('URL HTTPS'))?.querySelector('input')!
+ function field(label: string, selector: 'input' | 'textarea') {
+  const element = [...host.querySelectorAll('label')].find(item => item.textContent?.includes(label))?.querySelector(selector)
+  if (!element) throw new Error(`Field "${label}" tidak ditemukan`)
+  return element
+ }
+ const titleInput=field('Judul artikel','input')
+ const descInput=field('Ringkasan','textarea')
+ const catInput=field('Kategori','input')
+ const secTitle=field('Judul bagian','input')
+ const secPara=field('Paragraf','textarea')
+ const srcName=field('Nama sumber','input')
+ const srcUrl=field('URL HTTPS','input')
 
  await act(async()=>{
   Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(titleInput,'Waspada Modus Scam Phishing')

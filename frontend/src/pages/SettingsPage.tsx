@@ -239,7 +239,7 @@ function DeleteAccountAction() {
       await createAuthActions(client, window.location.origin).logout().catch(() => undefined)
     }
     await refresh().catch(() => null)
-    navigate('/', { replace: true })
+    await navigate('/', { replace: true })
   }
 
   return <section className="settings-danger">
