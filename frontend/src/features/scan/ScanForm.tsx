@@ -99,6 +99,26 @@ function scanSubmitLabel(isQr: boolean, decoding: boolean, submitting: boolean) 
   return isQr ? 'Baca QR Code' : 'Periksa Sekarang'
 }
 
+function ScanConsent({ isMessage, consent, setConsent, showHistory, messageHistory, toggleHistory }: Readonly<{
+  isMessage: boolean; consent: boolean; setConsent: (value: boolean) => void
+  showHistory: boolean; messageHistory: boolean; toggleHistory: () => void
+}>) {
+  return <div className="scan-consent">
+    <label className="scan-lookup-consent">
+      <input type="checkbox" checked={consent} aria-describedby="scan-consent-help" onChange={event => setConsent(event.target.checked)} />
+      <span>Izinkan pemeriksaan lengkap</span>
+    </label>
+    <p className="input-help" id="scan-consent-help">{isMessage
+      ? 'Mistral atau cadangan Nemotron via OpenRouter menganalisis teks yang disaring. Link & Web dapat memeriksa tautan publik lewat Google, VirusTotal, urlscan.io, DNS, dan RDAP. Hapus data pribadi sebelum memeriksa.'
+      : fullUrlConsentHelp}</p>
+    <p className="input-help">{isMessage
+      ? 'AWASIN bisa saja salah. Periksa kembali lewat kanal resmi sebelum membuka tautan, mengirim uang, atau membagikan data pribadi.'
+      : 'AWASIN bisa saja salah. Periksa kembali lewat kanal resmi sebelum memasukkan data sensitif.'}</p>
+    {showHistory && <button className="message-history-toggle" type="button" aria-pressed={messageHistory}
+      onClick={toggleHistory}>Simpan ringkasan ke Riwayat</button>}
+  </div>
+}
+
 export function ScanForm({ config, ownerId, onHistorySaved }: Readonly<{ config: ScanConfig; ownerId?: string; onHistorySaved?: () => void }>) {
   const [text, setText] = useState('')
   const [file, setFile] = useState<File | null>(null)
@@ -280,20 +300,9 @@ export function ScanForm({ config, ownerId, onHistorySaved }: Readonly<{ config:
         </fieldset>}
         {showTextField && <ScanTextField isUrl={isUrl} label={config.fieldLabel} text={text} error={error} onChange={changeText} />}
         {showFileUpload && <FileUpload label={isMessage ? 'Screenshot pesan' : config.fieldLabel} video={config.id === 'video'} file={file} error={error} onChange={changeFile} />}
-        {showConsent && <div className="scan-consent">
-          <label className="scan-lookup-consent">
-            <input type="checkbox" checked={consent} aria-describedby="scan-consent-help" onChange={event => setConsent(event.target.checked)} />
-            <span>Izinkan pemeriksaan lengkap</span>
-          </label>
-          <p className="input-help" id="scan-consent-help">{isMessage
-            ? 'Mistral atau cadangan Nemotron via OpenRouter menganalisis teks yang disaring. Link & Web dapat memeriksa tautan publik lewat Google, VirusTotal, urlscan.io, DNS, dan RDAP. Hapus data pribadi sebelum memeriksa.'
-            : fullUrlConsentHelp}</p>
-          <p className="input-help">{isMessage
-            ? 'AWASIN bisa saja salah. Periksa kembali lewat kanal resmi sebelum membuka tautan, mengirim uang, atau membagikan data pribadi.'
-            : 'AWASIN bisa saja salah. Periksa kembali lewat kanal resmi sebelum memasukkan data sensitif.'}</p>
-          {isMessage && ownerId && <button className="message-history-toggle" type="button" aria-pressed={messageHistory}
-            onClick={() => setMessageHistory(!messageHistory)}>Simpan ringkasan ke Riwayat</button>}
-        </div>}
+        {showConsent && <ScanConsent isMessage={isMessage} consent={consent} setConsent={setConsent}
+          showHistory={isMessage && Boolean(ownerId)} messageHistory={messageHistory}
+          toggleHistory={() => setMessageHistory(previous => !previous)} />}
         {isQr && <QrCamera key={file ? `${file.name}-${file.lastModified}` : 'no-file'} disabled={Boolean(file)} onDecoded={value => {
           generation.current++
           setDecoded(value)
