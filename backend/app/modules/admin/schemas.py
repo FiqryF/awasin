@@ -78,6 +78,11 @@ class FeedbackReview(Versioned):
     note: str = Field(default='', max_length=4000)
 
 
+class FeedbackReplyInput(Strict):
+    id: UUID
+    message: str = Field(min_length=1, max_length=2000)
+
+
 class Section(Strict):
     title: str = Field(min_length=2, max_length=200)
     paragraphs: list[str] = Field(min_length=1, max_length=20)

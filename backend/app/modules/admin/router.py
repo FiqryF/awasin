@@ -6,7 +6,7 @@ from pydantic import Field
 from starlette.exceptions import HTTPException
 from app.modules.identity.router import access_token, administrator, service
 from app.modules.identity.service import Identity, IdentityService
-from .schemas import Organization, DomainInput, DomainUpdate, DomainReview, FeedbackReview, ArticleInput, ArticleUpdate, ArticlePublish
+from .schemas import Organization, DomainInput, DomainUpdate, DomainReview, FeedbackReview, FeedbackReplyInput, ArticleInput, ArticleUpdate, ArticlePublish
 from .service import AdminService
 
 router = APIRouter(prefix='/admin', tags=['Administrator'], dependencies=[Depends(administrator)])
@@ -35,10 +35,21 @@ async def feedback(admin: Admin, offset: Offset = 0, limit: Limit = 20, category
 
 @router.get('/feedback/{record_id}')
 async def feedback_detail(record_id: UUID, admin: Admin):
-    original = await admin.one('feedback_submissions', record_id, 'id,category,fields,contact_email,report_id,created_at')
+    original = await admin.one('feedback_submissions', record_id, 'id,owner_id,category,fields,contact_email,report_id,created_at')
     response = await admin.provider.request('GET', '/rest/v1/feedback_handling', admin.token, params={'feedback_id': f'eq.{record_id}', 'select': 'status,note,version,updated_at', 'limit': '1'})
     rows = response.json()
-    return {**original, **(rows[0] if rows else {'status': 'new', 'note': '', 'version': 1})}
+    can_reply = original.pop('owner_id', None) is not None
+    return {**original, **(rows[0] if rows else {'status': 'new', 'note': '', 'version': 1}), 'can_reply': can_reply}
+
+
+@router.post('/feedback/{record_id}/replies', status_code=201)
+async def send_feedback_reply(record_id: UUID, payload: FeedbackReplyInput, admin: Admin):
+    reply_id = await admin.rpc('send_feedback_reply', {
+        'p_id': str(payload.id), 'p_feedback_id': str(record_id), 'p_message': payload.message,
+    })
+    if reply_id != str(payload.id):
+        raise HTTPException(503)
+    return {'id': reply_id}
 
 
 @router.patch('/feedback/{record_id}')
@@ -117,7 +128,7 @@ async def publish_article(record_id: UUID, payload: ArticlePublish, admin: Admin
 
 
 @router.get('/audit')
-async def audit(admin: Admin, offset: Offset = 0, limit: Limit = 20, entity_type: Literal['', 'feedback_handling', 'registry_domains', 'registry_organizations', 'education_articles'] = '', entity_id: UUID | None = None, since: datetime | None = None):
+async def audit(admin: Admin, offset: Offset = 0, limit: Limit = 20, entity_type: Literal['', 'feedback_handling', 'feedback_replies', 'registry_domains', 'registry_organizations', 'education_articles'] = '', entity_id: UUID | None = None, since: datetime | None = None):
     filters = {}
     if entity_type:
         filters['entity_type'] = f'eq.{entity_type}'

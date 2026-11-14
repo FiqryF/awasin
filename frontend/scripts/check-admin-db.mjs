@@ -22,7 +22,7 @@ try {
   create function auth.uid() returns uuid language sql stable as $$select (current_setting('request.jwt.claims',true)::jsonb->>'sub')::uuid$$;
   create function auth.jwt() returns jsonb language sql stable as $$select current_setting('request.jwt.claims',true)::jsonb$$;
   grant usage on schema auth to anon,authenticated;`)
-  await runSequentially(['202610230001_identity.sql', '202610230002_scan_history.sql', '202610230003_account_preferences.sql', '202610230004_feedback.sql', '202610290005_admin_workspace.sql', '202610290006_education_seed.sql'], async file => {
+  await runSequentially(['202610230001_identity.sql', '202610230002_scan_history.sql', '202610230003_account_preferences.sql', '202610230004_feedback.sql', '202610290005_admin_workspace.sql', '202610290006_education_seed.sql', '202611140009_feedback_replies.sql'], async file => {
     await db.exec(await readFile(new URL(`../../supabase/migrations/${file}`, import.meta.url), 'utf8'))
   })
   await db.query('insert into auth.users(id) values($1),($2)', [admin, user])
@@ -70,12 +70,48 @@ try {
   assert.ok(audit.every(e=>!JSON.stringify(e.metadata).includes('evidence') && !JSON.stringify(e.metadata).includes('Fixture review')))
   const feedback = (await db.query("select public.submit_feedback('33333333-3333-4333-8333-333333333333','other','{\"description\":\"Local database fixture only\"}',null,null,true) id")).rows[0].id
   await mutate('feedback',feedback,{status:'in_review',note:'Private internal fixture'},1)
+  const reply = '44444444-4444-4444-8444-444444444444'
+  const guestKey = '55555555-5555-4555-8555-555555555555'
+  const send = (id, message, replyId = reply) => db.query('select public.send_feedback_reply($1,$2,$3)', [replyId, id, message])
+  const submit = key => db.query("select public.submit_feedback($1,'other','{\"description\":\"Local database fixture only\"}',null,null,true) id", [key])
+  const inbox = async () => (await db.query('select * from public.my_feedback_replies()')).rows
+  await as('anon',null,null)
+  const guestFeedback = (await submit(guestKey)).rows[0].id
+  await assert.rejects(inbox, /permission denied/)
   await as('authenticated',user,su)
+  const userFeedback = (await submit('66666666-6666-4666-8666-666666666666')).rows[0].id
+  await assert.rejects(() => send(userFeedback, 'Spoofed reply'), /insufficient/)
+  await as('authenticated',admin,sa)
+  await assert.rejects(() => send(guestFeedback, 'Guest reply'), /invalid/)
+  await assert.rejects(() => send(userFeedback, ' '), /invalid/)
+  await send(userFeedback, 'Tindak lanjut untuk pengirim.')
+  await send(userFeedback, 'Tindak lanjut untuk pengirim.')
+  await assert.rejects(() => send(userFeedback, 'Changed after sending'), /unique/)
+  assert.equal((await inbox()).length, 0)
+  const replyAudit = (await db.query("select * from public.admin_audit_events where entity_type='feedback_replies'")).rows
+  assert.equal(replyAudit.length, 1)
+  assert.equal(replyAudit[0].actor_id, admin)
+  assert.equal(replyAudit[0].entity_id, reply)
+  assert.ok(!JSON.stringify(replyAudit[0]).includes('Tindak lanjut'))
+  await send(feedback, 'Private reply to another account.', '77777777-7777-4777-8777-777777777777')
+  await as('authenticated',user,su)
+  const replies = await inbox()
+  assert.equal(replies.length, 1)
+  assert.equal(replies[0].feedback_id, userFeedback)
+  assert.equal(replies[0].message, 'Tindak lanjut untuk pengirim.')
+  assert.deepEqual((await db.query('select id from public.feedback_replies')).rows, [{id: reply}])
+  assert.ok(replies[0].feedback_created_at)
+  assert.equal((await db.query('select * from public.my_feedback_replies(20)')).rows.length, 0)
+  await assert.rejects(db.query("update public.feedback_replies set message='spoofed'"), /permission denied/)
   assert.equal((await db.query('select * from public.feedback_handling')).rows.length,0)
   assert.equal((await db.query('select * from public.admin_audit_events')).rows.length,0)
+  await db.exec('reset role')
+  await db.query('delete from auth.sessions where id=$1',[su])
+  await as('authenticated',user,su)
+  assert.equal((await inbox()).length, 0)
   await db.exec('reset role')
   await db.query('delete from auth.sessions where id=$1',[sa])
   await as('authenticated',admin,sa)
   await assert.rejects(db.query('select public.admin_overview()'),/insufficient/)
-  console.log('PASS migrations 001–006 compatibility, exact four-article seed, Guest/User/Admin RLS, narrow RPC grants, atomic audit, optimistic conflicts, evidence review reset, safe publishing, immutable slugs, private notes and revoked admin sessions (local PGlite only).')
+  console.log('PASS admin migrations, feedback replies, private notes, idempotent sending, and Guest/User/Admin isolation (local PGlite).')
 } finally { await db.close() }

@@ -27,6 +27,16 @@ Link Inspector tetap menampilkan hasil dan status penyimpanan.
 
 ## Teknologi dan struktur
 
+### Message Analyzer
+
+Endpoint teks tetap `POST /api/v1/analysis` dengan `mode: "message"`. Untuk screenshot JPG, PNG, atau WebP, kirim multipart ke `POST /api/v1/analysis/media/message`. Batas pesan 10.000 karakter, unggahan 10 MB, dan gambar 20 megapiksel. OCR berjalan lokal di backend dengan satu proses OCR aktif per worker. Hasil OCR yang sudah disaring bisa dikoreksi di mode teks.
+
+- Pasang dependency Python dengan `python -m pip install -e ".[dev]"`.
+- Windows: pasang Tesseract 5 dari distribusi yang ditautkan dalam [panduan Tesseract](https://tesseract-ocr.github.io/tessdoc/Installation.html), lalu pastikan `eng.traineddata` dan `ind.traineddata` tersedia. `TESSERACT_CMD` menerima path ke executable, dan `TESSERACT_DATA_DIR` menerima path folder model jika berada di luar lokasi default. Periksa dengan `tesseract --list-langs` atau jalankan executable secara langsung.
+- Debian/Ubuntu: instal `tesseract-ocr tesseract-ocr-eng tesseract-ocr-ind` melalui package manager. Repo belum punya manifest deployment backend. Tambahkan binary dan kedua model ke image atau runtime hosting. Tanpa keduanya, API teks tetap tersedia dan OCR mengembalikan status terkontrol.
+- Mistral menerima teks yang disaring hanya setelah `message_ai_consent`. Penyaringan tidak menjamin seluruh data pribadi terhapus. Google hanya memeriksa hingga tiga URL publik yang berbeda setelah `message_link_consent`. URL dengan query, path sensitif, atau pembacaan OCR ambigu tidak diteruskan.
+- Riwayat memerlukan `history_consent`, akun aktif, penyimpanan yang diizinkan, dan konfigurasi Supabase backend yang sama dengan Link Inspector. Riwayat hanya menyimpan ringkasan dan risiko.
+
 Python **3.12+**, FastAPI/Pydantic, Pydantic Settings, Uvicorn, pytest dan HTTPX.
 Dependency dikelola melalui `pyproject.toml`; instalasi editable memasang metadata
 versi aplikasi yang juga digunakan oleh OpenAPI dan health response.

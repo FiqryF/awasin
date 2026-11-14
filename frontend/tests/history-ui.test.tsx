@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, type ReactNode } from 'react'
+import { act, useState, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { AuthContext } from '../src/features/auth/context'
 import { ScanHistoryPage } from '../src/pages/ScanHistoryPage'
+import { RecentHistory } from '../src/features/history/RecentHistory'
 import { AnalysisDetailPage } from '../src/pages/AnalysisDetailPage'
 import { SaveReportAction } from '../src/features/history/SaveReportAction'
 import type { ReportDetail } from '../src/features/history/contracts'
@@ -38,16 +39,26 @@ async function click(element: Element) { await act(async () => { element.dispatc
 function button(text: string, parent: ParentNode = document): Element { return [...parent.querySelectorAll('button')].find(element => element.textContent?.includes(text))! }
 
 describe('account history UI', () => {
-  it('keeps development examples labelled and separate from actionable account records', async () => {
+  it('shows only the empty state when no account records were saved', async () => {
     const {host}=await render(<ScanHistoryPage />)
-    const examples=host.querySelector('.history-dummy')!
-    expect(examples.textContent).toContain('simulasi, bukan hasil analisis')
-    expect(examples.querySelectorAll('li')).toHaveLength(2)
-    expect(examples.querySelector('a,button')).toBeNull()
+    expect(host.querySelector('.history-dummy')).toBeNull()
+    expect(host.querySelector('.history-list')).toBeNull()
     expect(host.querySelector('.history-list-toolbar')).toBeNull()
     expect(host.textContent).toContain('Belum ada pemeriksaan tersimpan.')
     expect(api.getReport).not.toHaveBeenCalled()
     expect(api.deleteHistory).not.toHaveBeenCalled()
+  })
+  it('refreshes recent activity after a save confirmation', async () => {
+    function Activity() {
+      const [revision, setRevision] = useState(0)
+      return <><button onClick={() => setRevision(1)}>Confirm save</button><RecentHistory revision={revision} /></>
+    }
+    const { host } = await render(<Activity />)
+    expect(host.textContent).toContain('Belum ada pemeriksaan tersimpan.')
+    api.listHistory.mockResolvedValueOnce({ items: [report], next_cursor: null })
+    await click(button('Confirm save', host))
+    expect(host.textContent).toContain(report.safe_label)
+    expect(api.listHistory).toHaveBeenCalledTimes(2)
   })
   it('distinguishes empty history, filtering and server failure', async () => {
     const { host } = await render(<ScanHistoryPage />)

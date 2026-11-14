@@ -6,13 +6,13 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from starlette.exceptions import HTTPException
 
-from app.modules.identity.router import bearer, service
-from app.modules.identity.service import IdentityService
+from app.modules.identity.router import access_token, bearer, current_user, service
+from app.modules.identity.service import Identity, IdentityService
 from app.modules.history.service import HistoryService
 
 router = APIRouter(prefix='/feedback', tags=['Feedback'])
@@ -85,6 +85,38 @@ class FeedbackExport(BaseModel):
     contact_email: str | None
     report_id: UUID | None
     created_at: datetime
+
+
+class FeedbackReply(BaseModel):
+    id: UUID
+    feedback_id: UUID
+    category: Literal['detection', 'bug', 'idea', 'other']
+    feedback_title: str
+    feedback_created_at: datetime
+    message: str
+    created_at: datetime
+
+
+class FeedbackInbox(BaseModel):
+    items: list[FeedbackReply]
+    has_more: bool
+
+
+@router.get('/replies', response_model=FeedbackInbox)
+async def feedback_replies(response: Response, token: Annotated[str, Depends(access_token)],
+                           provider: Annotated[IdentityService, Depends(service)],
+                           identity: Annotated[Identity, Depends(current_user)],
+                           offset: Annotated[int, Query(ge=0, le=2147483647)] = 0):
+    result = await provider.request('POST', '/rest/v1/rpc/my_feedback_replies', token, json={'p_offset': offset})
+    try:
+        rows = result.json()
+        if not isinstance(rows, list):
+            raise ValueError('Expected feedback reply rows')
+        inbox = FeedbackInbox(items=rows[:20], has_more=len(rows) > 20)
+    except (ValueError, TypeError):
+        raise HTTPException(503) from None
+    response.headers['Cache-Control'] = 'no-store'
+    return inbox
 
 
 class FeedbackLimiter:

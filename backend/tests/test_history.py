@@ -44,6 +44,10 @@ def history_api(settings):
         assert request.headers.get('authorization') in (None, 'Bearer fixture-token')
         if state['failure']:
             return httpx.Response(500, text='private-database-error')
+        if request.url.path == '/rest/v1/rpc/my_feedback_replies':
+            assert request.headers['authorization'] == 'Bearer fixture-token'
+            assert json.loads(request.content) == {'p_offset': 0}
+            return httpx.Response(200, json=state['feedback_replies'])
         if request.url.path == '/rest/v1/rpc/submit_feedback':
             payload = json.loads(request.content)
             assert 'owner_id' not in payload

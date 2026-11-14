@@ -56,7 +56,8 @@ export function UrlAnalysisReport({ result, ai }: Readonly<{
         <InspectionCoverage {...coverage} />
         {historyStatus && <p className="url-report-note" role="status">
           {historyStatus === 'saved' ? 'Tersimpan di Riwayat.' : historyStatus === 'disabled'
-            ? 'Penyimpanan Riwayat dinonaktifkan di pengaturan akun.' : 'Hasil belum dapat disimpan ke Riwayat.'}
+            ? 'Penyimpanan Riwayat dinonaktifkan di pengaturan akun.' : historyStatus === 'unconfigured'
+              ? 'Penyimpanan Riwayat belum dikonfigurasi di server.' : 'Hasil belum dapat disimpan ke Riwayat.'}
         </p>}
       </div>
     </section>

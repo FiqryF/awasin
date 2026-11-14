@@ -20,6 +20,7 @@ from app.modules.history.schemas import ReportDetail
 from app.modules.history.service import HistoryService
 
 from .orchestrator import AnalysisInput, AnalysisOrchestrator
+from .message import MessageAnalyzer
 from .ai_schema import AIExplanation, AIOffer, AIRequest, AIUrlAnalysis, DetectorResult
 from .ai_tickets import Binding, digest
 from .ai_validator import explain
@@ -87,6 +88,12 @@ def explanation_binding(request: Request, identity: Identity | None) -> Binding:
     return Binding(subject=f"anonymous:{host}", session="")
 
 
+def admit_message(engine: AnalysisOrchestrator, request: Request, identity: Identity | None):
+    analyzer = engine.adapters.get('message')
+    if isinstance(analyzer, MessageAnalyzer) and not analyzer.admit(explanation_binding(request, identity).subject):
+        raise HTTPException(429, headers={'Retry-After': '60'})
+
+
 def url_history_report(result: AnalysisResponse) -> ReportDetail | None:
     if not result.provenance or not result.url_report:
         return None
@@ -101,12 +108,37 @@ def url_history_report(result: AnalysisResponse) -> ReportDetail | None:
     )
 
 
+async def save_message_history(request: Request, identity: Identity | None, data: AnalysisInput, result: AnalysisResponse):
+    report = result.message_report
+    if not identity or not data.history_consent or not report or not result.provenance or report.ocr_status not in {'not_requested', 'completed', 'low_confidence', 'truncated'}:
+        return
+    risk = 'inconclusive' if result.risk == 'unknown' else result.risk
+    settings = request.app.state.settings
+    engine, version = result.provenance.engine, result.provenance.version
+    if report.ai_status == 'completed':
+        engine, version = ('Nemotron', settings.openrouter_detector_model[:80]) if report.analyst == 'nemotron' else (
+            'Mistral', settings.mistral_model
+        )
+    record = ReportDetail(
+        id=result.analysis_id, mode='message', created_at=result.checked_at, saved_at=result.checked_at,
+        safe_label='Pemeriksaan pesan', status='completed', risk=risk,
+        engine=engine, engine_version=version,
+        analyzed_at=result.checked_at,
+        result={'risk': risk, 'findings': [{'title': 'Ringkasan', 'description': result.explanation}],
+                'recommendations': report.recommendations},
+    )
+    result.history_status = await record_url_history(request, identity, record)
+
+
 async def record_url_history(request: Request, identity: Identity, report: ReportDetail, result: AIExplanation | None = None):
     provider = request.app.state.identity
     token = request.headers['authorization'].partition(' ')[2].strip()
+    history = HistoryService(provider, token, identity)
     try:
         if (await read_preferences(provider, token, identity)).history_retention == 'disabled':
             return 'disabled'
+        if not history.write_key():
+            return 'unconfigured'
         if isinstance(result, AIUrlAnalysis) and result.status == 'completed':
             risk = 'inconclusive' if result.risk == 'unknown' else result.risk
             report = report.model_copy(update={
@@ -115,7 +147,7 @@ async def record_url_history(request: Request, identity: Identity, report: Repor
                 'result': report.result.model_copy(update={'risk': risk, 'recommendations': result.recommendations,
                     'findings': [report.result.findings[0].model_copy(update={'description': result.summary or report.result.findings[0].description})]}),
             })
-        await HistoryService(provider, token, identity).record_url(report)
+        await history.record_url(report)
     except HTTPException:
         return 'unavailable'
     return 'saved'
@@ -134,7 +166,11 @@ async def analyze(payload: TextRequest, request: Request, response: Response, id
                 enhanced_lookup_consent=payload.enhanced_lookup_consent,
             )
         elif isinstance(payload, MessageRequest):
-            data = AnalysisInput(**context, text=checked_text(payload.text, 10))
+            data = AnalysisInput(**context, text=checked_text(payload.text, 10),
+                                 message_ai_consent=payload.message_ai_consent, message_link_consent=payload.message_link_consent,
+                                 message_openrouter_consent=payload.message_openrouter_consent,
+                                 message_link_enhanced_consent=payload.message_link_enhanced_consent)
+            admit_message(engine, request, identity)
         else:
             qr_payload = checked_text(payload.payload, 1)
             candidate = qr_payload.strip()
@@ -155,6 +191,8 @@ async def analyze(payload: TextRequest, request: Request, response: Response, id
         result = await attach_ai_results(result, payload, data, request, identity, history_report)
         if identity and history_report and not (payload.url_ai_consent and result.ai and result.ai.status == 'pending'):
             result.history_status = await record_url_history(request, identity, history_report)
+    elif isinstance(payload, MessageRequest):
+        await save_message_history(request, identity, data, result)
     return result
 
 
@@ -307,6 +345,8 @@ async def analyze_media(mode: MediaMode, request: Request, response: Response, i
             raise HTTPException(400)
         if int(length) > limit:
             raise HTTPException(413)
+    if mode == 'message':
+        admit_message(engine, request, identity)
     async with analysis_slot(engine):
         parser = AnalysisFormParser(
             request.headers, bounded_body(request, limit), max_files=1, max_fields=1, max_part_size=FORM_OVERHEAD,
@@ -338,8 +378,15 @@ async def analyze_media(mode: MediaMode, request: Request, response: Response, i
                 )
             except (ValidationError, ValueError):
                 raise HTTPException(422) from None
-            return await engine.run(AnalysisInput(
+            data = AnalysisInput(
                 **input_context(payload, identity), text=text, media=media, media_stream=file.file,
-            ))
+                message_ai_consent=payload.message_ai_consent, message_link_consent=payload.message_link_consent,
+                message_openrouter_consent=payload.message_openrouter_consent,
+                message_link_enhanced_consent=payload.message_link_enhanced_consent,
+            )
+            result = await engine.run(data)
         finally:
             await form.close()
+    if mode == 'message':
+        await save_message_history(request, identity, data, result)
+    return result

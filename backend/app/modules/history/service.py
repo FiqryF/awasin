@@ -87,11 +87,15 @@ class HistoryService:
             raise HTTPException(409)
         return await self.get(report_id)
 
-    async def record_url(self, report: ReportDetail) -> None:
+    def write_key(self) -> str:
         secret = self.provider.settings.supabase_history_secret_key
-        origin = self.provider.settings.supabase_url
         key = secret.get_secret_value().strip() if secret else ''
-        if not origin or not key.startswith('sb_secret_'):
+        return key if self.provider.settings.supabase_url and key.startswith('sb_secret_') else ''
+
+    async def record_url(self, report: ReportDetail) -> None:
+        key = self.write_key()
+        origin = self.provider.settings.supabase_url
+        if not key:
             raise HTTPException(503)
         row = report.model_dump(mode='json', exclude={'risk'})
         row['owner_id'] = str(self.identity.id)

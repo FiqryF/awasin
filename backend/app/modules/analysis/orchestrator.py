@@ -27,6 +27,10 @@ class AnalysisInput:
     url_target: UrlTarget | None = None
     threat_lookup_consent: bool = False
     enhanced_lookup_consent: bool = False
+    message_ai_consent: bool = False
+    message_openrouter_consent: bool = False
+    message_link_consent: bool = False
+    message_link_enhanced_consent: bool = False
 
 
 class EngineAdapter(Protocol):
@@ -74,7 +78,13 @@ class AnalysisOrchestrator:
             )
         error: ErrorCode
         try:
-            async with asyncio.timeout(self.timeout):
+            timeout = self.timeout
+            if request.mode == 'message':
+                if request.message_ai_consent and request.message_openrouter_consent:
+                    timeout = max(timeout, 27)
+                elif request.media:
+                    timeout = max(timeout, 18)
+            async with asyncio.timeout(timeout):
                 result = await adapter.analyze(request)
                 if not isinstance(result, EngineResult):
                     raise TypeError("Adapter returned an invalid result")

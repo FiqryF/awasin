@@ -44,9 +44,14 @@ def box(kind, data):
 
 
 @pytest.mark.parametrize("payload", [
+    {"mode": "qr", "payload": "WIFI:T:WPA;S:example;P:private;;", "payload_consent": True},
+    {"mode": "qr", "payload": "https://example.com", "payload_consent": True},
     {"mode": "message", "text": "Pesan sintetis untuk tes"},
 ])
-def test_unavailable_is_not_a_report(client, payload):
+def test_unavailable_is_not_a_report(client, payload, monkeypatch):
+    adapters = client.app.app.state.analysis.adapters
+    for mode in ("qr", "link", "website", "message"):
+        monkeypatch.delitem(adapters, mode, raising=False)
     request_id = str(uuid4())
     response = client.post(API, json={**payload, "request_id": request_id, "history_consent": True})
     assert response.status_code == 200
@@ -61,7 +66,6 @@ def test_unavailable_is_not_a_report(client, payload):
 
 
 @pytest.mark.parametrize("mode, content_type, content, metadata", [
-    ("message", "image/png", image_bytes(), {"mode": "message", "text": "Private fixture text"}),
     ("qr", "image/jpeg", image_bytes("JPEG"), {}),
     ("image", "image/webp", image_bytes("WEBP"), {}),
     # Container envelopes only. No samples are decoded or treated as real detections.

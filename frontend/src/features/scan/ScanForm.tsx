@@ -11,11 +11,18 @@ import { decodeQr, decodedHttpUrl, qrPayloadGuidance } from './decodeQr'
 import { analysisErrorMessage, requestAIExplanation, requestAnalysis } from './analysisApi'
 import type { AIState, AnalysisInput, AnalysisResult } from './analysisApi'
 import { UrlAnalysisReport } from './UrlAnalysisReport'
+import { MessageAnalysisReport } from './MessageAnalysisReport'
 import './qr.css'
 
 const fullConsent = { threat_lookup_consent: true, enhanced_lookup_consent: true, url_ai_consent: true, openrouter_fallback_consent: true } as const
+const messageFullConsent = {
+  message_ai_consent: true,
+  message_openrouter_consent: true,
+  message_link_consent: true,
+  message_link_enhanced_consent: true,
+} as const
 
-export function ScanForm({ config, ownerId }: Readonly<{ config: ScanConfig; ownerId?: string }>) {
+export function ScanForm({ config, ownerId, onHistorySaved }: Readonly<{ config: ScanConfig; ownerId?: string; onHistorySaved?: () => void }>) {
   const [text, setText] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -23,6 +30,8 @@ export function ScanForm({ config, ownerId }: Readonly<{ config: ScanConfig; own
   const [requestError, setRequestError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [consent, setConsent] = useState(false)
+  const [messageMode, setMessageMode] = useState<'text' | 'screenshot'>('text')
+  const [messageHistory, setMessageHistory] = useState(false)
   const [ai, setAi] = useState<AIState | null>(null)
   const [decoded,setDecoded]=useState<string|null>(null)
   const [qrConsent,setQrConsent]=useState(false)
@@ -36,6 +45,8 @@ export function ScanForm({ config, ownerId }: Readonly<{ config: ScanConfig; own
   const form = useRef<HTMLFormElement>(null)
   const reducedMotion = usePrefersReducedMotion()
   const isUrl = config.id === 'link'
+  const isMessage = config.id === 'message'
+  const screenshot = isMessage && messageMode === 'screenshot'
   const decodedUrl = config.id === 'qr' && decoded !== null ? decodedHttpUrl(decoded) : null
   let submitLabel = 'Periksa Sekarang'
   if (config.id === 'qr') submitLabel = 'Baca QR Code'
@@ -60,7 +71,9 @@ export function ScanForm({ config, ownerId }: Readonly<{ config: ScanConfig; own
       const next = await requestAnalysis(input, request.signal, ownerId)
       if (request.signal.aborted) return
       const { ai: offer, ...fallback } = next
+      if (input.mode === 'message' && (!ownerId || input.history_consent !== true)) delete fallback.history_status
       setResult(fallback)
+      if (fallback.history_status === 'saved') onHistorySaved?.()
       setSubmitting(false)
       if ('url_ai_consent' in input && input.url_ai_consent && next.url_report) {
         if (offer?.status !== 'pending') {
@@ -71,6 +84,7 @@ export function ScanForm({ config, ownerId }: Readonly<{ config: ScanConfig; own
         try {
           const explanation = await requestAIExplanation(offer.ticket, request.signal, ownerId)
           if (!request.signal.aborted) {
+            if (explanation.history_status === 'saved') onHistorySaved?.()
             setAi(explanation.status === 'completed' && explanation.risk == null
               ? { ...explanation, status: 'validation_failed' }
               : explanation)
@@ -107,10 +121,10 @@ export function ScanForm({ config, ownerId }: Readonly<{ config: ScanConfig; own
 
   async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
-    const validationError = validateScanInput(config.id, text, file)
+    const validationError = screenshot && !file ? 'Pilih screenshot pesan terlebih dahulu.' : validateScanInput(config.id, text, file)
     setError(validationError)
     clearAnalysis()
-    if (validationError) form.current?.querySelector<HTMLElement>(isUrl || config.id === 'message' ? '.text-input' : 'input[type="file"]')?.focus()
+    if (validationError) form.current?.querySelector<HTMLElement>(isUrl || (isMessage && !screenshot) ? '.text-input' : 'input[type="file"]')?.focus()
     if(validationError)return
     const mode = config.id
     if (mode === 'qr' && file) await readQr(file)
@@ -123,8 +137,13 @@ export function ScanForm({ config, ownerId }: Readonly<{ config: ScanConfig; own
       })
     }
     else if (mode === 'message') {
-      if (file) await analyze({ mode, file, ...(text.trim() ? { text } : {}) })
-      else await analyze({ mode, text })
+      const options = {
+        ...(consent ? messageFullConsent : {}),
+        ...(ownerId && messageHistory ? { history_consent: true } : {}),
+      }
+      setConsent(false); setMessageHistory(false)
+      if (screenshot && file) await analyze({ mode, file, ...options })
+      else await analyze({ mode, text, ...options })
     } else if (file) await analyze({ mode, file })
   }
 
@@ -133,27 +152,41 @@ export function ScanForm({ config, ownerId }: Readonly<{ config: ScanConfig; own
       initial={reducedMotion ? false : { opacity: 0, y: 8, filter: 'blur(3px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} transition={{ duration: reducedMotion ? 0 : 0.28, ease: [0.16, 1, 0.3, 1] }}>
       <div className="scan-panel-heading"><h3>{config.title}</h3><p>{config.description}</p></div>
       <form noValidate ref={form} onSubmit={handleSubmit}>
-        {(isUrl || config.id === 'message') && <div className="text-field">
+        {isMessage && <fieldset className="message-mode"><legend>Pilih input pesan</legend>
+          {(['text', 'screenshot'] as const).map(mode => <label key={mode}>
+            <input type="radio" name="message-mode" checked={messageMode === mode} onChange={() => {
+              setMessageMode(mode); setError(null); setConsent(false); setMessageHistory(false); clearAnalysis()
+            }} /> {mode === 'text' ? 'Teks Pesan' : 'Screenshot'}
+          </label>)}
+        </fieldset>}
+        {(isUrl || (isMessage && !screenshot)) && <div className="text-field">
           <label className="field-label" htmlFor="scan-text">{config.fieldLabel}</label>
           {isUrl ? <input className="text-input" id="scan-text" type="url" inputMode="url" autoComplete="off" spellCheck={false} placeholder="Masukkan tautan atau domain website…" value={text} maxLength={4096} aria-invalid={Boolean(error)} aria-describedby={`url-help${error ? ' scan-error' : ''}`} onChange={(event) => { setText(event.target.value); setConsent(false); setError(null); clearAnalysis() }} />
-            : <textarea className="text-input" id="scan-text" rows={4} placeholder="Tempel pesan mencurigakan di sini…" maxLength={10000} value={text} aria-invalid={Boolean(error)} aria-describedby={`message-help${error ? ' scan-error' : ''}`} onChange={(event) => { setText(event.target.value); setError(null); clearAnalysis() }} />}
-          {config.id === 'message' && <p className="input-help" id="message-help">Teks minimal 10 karakter, maksimal 10.000. Bisa juga menggunakan screenshot di bawah.</p>}
+            : <textarea className="text-input" id="scan-text" rows={4} placeholder="Tempel pesan mencurigakan di sini…" maxLength={10000} value={text} aria-invalid={Boolean(error)} aria-describedby={`message-help${error ? ' scan-error' : ''}`} onChange={(event) => { setText(event.target.value); setConsent(false); setMessageHistory(false); setError(null); clearAnalysis() }} />}
+          {isMessage && <p className="input-help" id="message-help">Minimal 10 karakter. {text.length.toLocaleString('id-ID')} / 10.000 karakter.</p>}
           {isUrl && <p className="input-help" id="url-help">AWASIN memeriksa struktur alamat dan mencocokkan domain dengan referensi resmi yang tersedia.</p>}
         </div>}
-        {isUrl && <div className="scan-consent">
+        {!isUrl && (!isMessage || screenshot) && <FileUpload label={isMessage ? 'Screenshot pesan' : config.fieldLabel} video={config.id === 'video'} file={file} error={error} onChange={(next) => {
+          generation.current++;setDecoded(null);setDecoding(false);setQrConsent(false)
+          clearAnalysis()
+          const fileError = next ? validateFile(next, config.id) : null
+          if (isMessage) { setConsent(false); setMessageHistory(false) }
+          setError(fileError); setFile(fileError ? null : next)
+        }} />}
+        {(isUrl || isMessage) && <div className="scan-consent">
           <label className="scan-lookup-consent">
             <input type="checkbox" checked={consent} aria-describedby="scan-consent-help" onChange={event => setConsent(event.target.checked)} />
             <span>Izinkan pemeriksaan lengkap</span>
           </label>
-          <p className="input-help" id="scan-consent-help">URL publik yang lolos penyaringan dapat diperiksa oleh Mistral, Nemotron melalui OpenRouter, Google, VirusTotal, dan urlscan.io. Jangan masukkan tautan berisi data pribadi atau token.</p>
-          <p className="input-help">AWASIN bisa saja salah. Periksa kembali lewat kanal resmi sebelum memasukkan data sensitif.</p>
+          <p className="input-help" id="scan-consent-help">{isMessage
+            ? 'Mistral atau cadangan Nemotron via OpenRouter menganalisis teks yang disaring. Link & Web dapat memeriksa tautan publik lewat Google, VirusTotal, urlscan.io, DNS, dan RDAP. Hapus data pribadi sebelum memeriksa.'
+            : 'URL publik yang lolos penyaringan dapat diperiksa oleh Mistral, Nemotron melalui OpenRouter, Google, VirusTotal, dan urlscan.io. Jangan masukkan tautan berisi data pribadi atau token.'}</p>
+          <p className="input-help">{isMessage
+            ? 'AWASIN bisa saja salah. Periksa kembali lewat kanal resmi sebelum membuka tautan, mengirim uang, atau membagikan data pribadi.'
+            : 'AWASIN bisa saja salah. Periksa kembali lewat kanal resmi sebelum memasukkan data sensitif.'}</p>
+          {isMessage && ownerId && <button className="message-history-toggle" type="button" aria-pressed={messageHistory}
+            onClick={() => setMessageHistory(!messageHistory)}>Simpan ringkasan ke Riwayat</button>}
         </div>}
-        {!isUrl && <FileUpload label={config.id === 'message' ? 'Screenshot pesan (opsional)' : config.fieldLabel} video={config.id === 'video'} file={file} error={error} onChange={(next) => {
-          generation.current++;setDecoded(null);setDecoding(false);setQrConsent(false)
-          clearAnalysis()
-          const fileError = next ? validateFile(next, config.id) : null
-          setError(fileError); setFile(fileError ? null : next)
-        }} />}
         {config.id === 'qr' && <QrCamera key={file ? `${file.name}-${file.lastModified}` : 'no-file'} disabled={Boolean(file)} onDecoded={value => {
           generation.current++
           setDecoded(value)
@@ -164,7 +197,7 @@ export function ScanForm({ config, ownerId }: Readonly<{ config: ScanConfig; own
         {error && <p id="scan-error" role="alert" className="form-error">{error}</p>}
         <div className="form-bottom">
           <p className="privacy-note"><LockKeyhole size={15} aria-hidden="true" />
-            {config.id === 'qr' ? <>Gambar QR dibaca di perangkatmu. Isi QR dikirim ke backend hanya saat kamu memilih analisis dan menyetujui pengiriman; payload tidak disimpan atau diteruskan ke provider eksternal.{ownerId && ' Ringkasan QR tidak disimpan ke Riwayat.'}</> : isUrl && ownerId ? 'Ringkasan hasil disimpan ke Riwayat jika penyimpanan aktif. URL lengkap tidak disimpan.' : 'Input dikirim ke AWASIN untuk validasi dan tidak disimpan ke Riwayat.'}
+            {isMessage ? 'Teks asli dan screenshot tidak disimpan ke Riwayat.' : config.id === 'qr' ? <>Gambar QR dibaca di perangkatmu. Isi QR dikirim ke backend hanya saat kamu memilih analisis dan menyetujui pengiriman; payload tidak disimpan atau diteruskan ke provider eksternal.{ownerId && ' Ringkasan QR tidak disimpan ke Riwayat.'}</> : isUrl && ownerId ? 'Ringkasan hasil disimpan ke Riwayat jika penyimpanan aktif. URL lengkap tidak disimpan.' : 'Input dikirim ke AWASIN untuk validasi dan tidak disimpan ke Riwayat.'}
           </p>
           <button type="submit" className="button button-red" disabled={decoding || submitting}>{submitLabel} <ArrowUpRight size={19} aria-hidden="true" /></button>
         </div>
@@ -188,12 +221,15 @@ export function ScanForm({ config, ownerId }: Readonly<{ config: ScanConfig; own
           </div>}
         </section>}
         {requestError && <p className="form-error" role="alert">{requestError}</p>}
-        <output className={submitting || (result && !result.url_report) ? 'scan-notice' : 'sr-only'}>
+        <output className={submitting || (result && !result.url_report && !result.message_report) ? 'scan-notice' : 'sr-only'}>
           {submitting && 'Menghubungi layanan pemeriksaan…'}
-          {result && !result.url_report && <><Info size={20} aria-hidden="true" /><span><strong>{result.explanation}</strong> {result.limitations.join(' ')}</span></>}
+          {result && !result.url_report && !result.message_report && <><Info size={20} aria-hidden="true" /><span><strong>{result.explanation}</strong> {result.limitations.join(' ')}</span></>}
         </output>
         {result?.url_report && <UrlAnalysisReport result={result} ai={ai} />}
-        {result && !result.url_report && result.evidence.length > 0 && <ul className="scan-notice">
+        {result?.message_report && <MessageAnalysisReport result={result} onEditText={preview => {
+          clearAnalysis(); setMessageMode('text'); setText(preview)
+        }} />}
+        {result && !result.url_report && !result.message_report && result.evidence.length > 0 && <ul className="scan-notice">
           {result.evidence.map(item => <li key={item.id}>{item.explanation} ({item.source})</li>)}
         </ul>}
       </form>
